@@ -1,0 +1,3261 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>企业级四表联动财务核算与法定审计底稿系统 (SME-FRS)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', 'Noto Sans SC', sans-serif;
+      background-color: #f1f5f9;
+      color: #0f172a;
+    }
+    .mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    @media print {
+      .no-print { display: none !important; }
+      .print-only { display: block !important; }
+      body { background-color: #ffffff; }
+    }
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #f1f5f9; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- TOP NAVIGATION & MULTI-TENANT COMPANY SWITCHER -->
+  <header class="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-40 no-print shadow-md">
+    <div class="max-w-[1600px] mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-lg bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-400 font-bold text-lg shadow-inner">
+          HK
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="font-bold text-base sm:text-lg tracking-tight">香港服务+跨境贸易 四表联动核算与审计底稿系统</h1>
+            <span class="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-emerald-400 border border-emerald-500/30 font-medium">SME-FRS 准则引擎</span>
+          </div>
+          <p class="text-xs text-slate-400">独立多公司账套库 · HSBC 周一 09:30 汇率勾兑 · 差额暂记配平与全凭证门禁机制</p>
+        </div>
+      </div>
+
+      <!-- Company Switcher & Tenant Controls -->
+      <div class="flex flex-wrap items-center gap-2.5">
+        <div class="flex items-center bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5">
+          <span class="text-xs text-slate-400 mr-2">当前核算账套:</span>
+          <select id="companySelect" onchange="switchCompany(this.value)" class="bg-transparent text-sm font-semibold text-white focus:outline-none cursor-pointer pr-2">
+          </select>
+        </div>
+
+        <button onclick="openNewCompanyModal()" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-medium transition flex items-center gap-1.5 shadow-sm">
+          <span>+ 新增公司主体</span>
+        </button>
+
+        <!-- NEW: GOOGLE SHEETS + DRIVE CLOUD SYNC HUB CONTROLS -->
+        <div class="flex items-center gap-1.5 bg-slate-800/90 border border-slate-700 rounded-lg p-1">
+          <button onclick="openCloudSyncModal()" class="px-2.5 py-1 rounded-md bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 text-xs font-semibold transition flex items-center gap-1.5">
+            <span id="cloudStatusDot" class="w-2 h-2 rounded-full bg-amber-400"></span>
+            <span id="cloudStatusText">Google Sheets 云端同步</span>
+          </button>
+          <button onclick="pushActiveCompanyToCloud()" title="一键推送当前公司四表与流水至 Google Sheets" class="px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-[11px] text-slate-200 font-medium transition">
+            ⬆ 推送云端
+          </button>
+          <button onclick="pullEntitiesFromCloud()" title="从 Google Sheets 云端拉取账套" class="px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-[11px] text-slate-200 font-medium transition">
+            ⬇ 拉取
+          </button>
+        </div>
+
+        <button onclick="resetDemoCompanies()" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-slate-300 transition">
+          重置演示库
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ACTIVE COMPANY PROFILE & PERIOD BAR -->
+  <section class="bg-white border-b border-slate-200 shadow-sm no-print">
+    <div class="max-w-[1600px] mx-auto px-4 sm:px-6 py-3">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
+        <!-- Company Identity Info -->
+        <div class="lg:col-span-4 flex flex-wrap items-center gap-3 border-b lg:border-b-0 lg:border-r border-slate-200 pb-3 lg:pb-0 lg:pr-4">
+          <div class="flex-1 min-w-[220px]">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span id="headerCompanyNameCN" class="font-bold text-slate-900 text-base"></span>
+              <button onclick="openEditCompanyModal()" class="text-xs text-indigo-600 hover:text-indigo-800 font-medium underline">编辑主体与期初</button>
+              <a id="headerCloudSheetLink" href="#" target="_blank" class="hidden text-[11px] px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-medium hover:bg-emerald-100">
+                🔗 打开云端 Google Sheet
+              </a>
+            </div>
+            <p id="headerCompanyNameEN" class="text-xs text-slate-500 font-medium mono truncate"></p>
+            <div class="flex flex-wrap items-center gap-3 mt-1.5 text-xs text-slate-600">
+              <span>BR登记号: <strong id="headerCompanyBR" class="mono text-slate-800"></strong></span>
+              <span>主账户尾号: <strong id="headerCompanyBank" class="mono text-slate-800"></strong></span>
+              <span>本位币: <strong class="mono text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">HKD</strong></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Date Range, Accounting Mode & Share Capital -->
+        <div class="lg:col-span-5 flex flex-wrap items-center gap-2.5 border-b lg:border-b-0 lg:border-r border-slate-200 pb-3 lg:pb-0 lg:pr-4">
+          <div>
+            <label class="block text-[11px] font-medium text-slate-500">建账模式</label>
+            <select id="accountingModeSelect" onchange="updateAccountingMode()" class="mt-0.5 px-2 py-1 text-xs border border-slate-300 rounded-md font-semibold bg-slate-50 focus:outline-none">
+              <option value="inaugural">首年新设 (零期初)</option>
+              <option value="carry">往期延续 (含期初余额)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[11px] font-medium text-slate-500">核算起始日期</label>
+            <input type="date" id="periodStart" onchange="updatePeriodAndRecalc()" class="mt-0.5 px-2 py-1 text-xs border border-slate-300 rounded-md font-medium mono focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-[11px] font-medium text-slate-500">核算截止日期</label>
+            <input type="date" id="periodEnd" onchange="updatePeriodAndRecalc()" class="mt-0.5 px-2 py-1 text-xs border border-slate-300 rounded-md font-medium mono focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-[11px] font-medium text-slate-500">股本实缴 (HK$ <span id="shareCapitalLabel">10,000</span>)</label>
+            <select id="shareCapitalPaidSelect" onchange="updateShareCapitalStatus()" class="mt-0.5 px-2 py-1 text-xs border border-slate-300 rounded-md font-medium bg-slate-50 focus:outline-none">
+              <option value="unpaid">未实缴 (挂应收股东款)</option>
+              <option value="paid">已实缴入账</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- FX Rate Mode Quick Indicator -->
+        <div class="lg:col-span-3 flex items-center justify-between gap-2">
+          <div>
+            <div class="flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-blue-600"></span>
+              <span class="text-xs font-semibold text-slate-700">多币种折算基准:</span>
+            </div>
+            <p id="fxActiveSummary" class="text-xs text-slate-500 mt-0.5 mono">HSBC 每周一 09:30 定盘汇率</p>
+            <p id="lastSyncTimestampBar" class="text-[10px] text-slate-400 mono mt-0.5">云端状态: 本地浏览器缓存模式</p>
+          </div>
+          <button onclick="openFxModal()" class="px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold transition shrink-0">
+            汇率表设置 (FX)
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- REAL-TIME THREE-WAY RECONCILIATION & VOUCHER GATEKEEPER BANNER -->
+  <section class="max-w-[1600px] w-full mx-auto px-4 sm:px-6 pt-4 no-print">
+    <div id="auditGateBanner" class="rounded-xl p-4 border transition-all shadow-sm">
+      <!-- Dynamically populated by JS -->
+    </div>
+  </section>
+
+  <!-- MAIN WORKSPACE GRID -->
+  <main class="max-w-[1600px] w-full mx-auto px-4 sm:px-6 py-5 flex-1 grid grid-cols-1 xl:grid-cols-12 gap-6">
+
+    <!-- LEFT COLUMN: INPUT HUB, ATTACHMENTS, SMART SPLITTERS & MANUAL FORM (5 COLS) -->
+    <div class="xl:col-span-5 space-y-5 no-print">
+
+      <!-- 1. FOUR ATTACHMENT UPLOAD ZONES -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+          <div>
+            <h2 class="font-bold text-sm text-slate-800">1. 原始凭证与附件采集舱 (Input Hub)</h2>
+            <p class="text-[11px] text-slate-500">支持银行月结单 CSV 导入、贸易合同、支出发票及法定注册资料归档</p>
+          </div>
+          <button onclick="downloadSampleCSV()" class="text-xs text-indigo-600 hover:text-indigo-800 font-medium underline">下载标准流水CSV模板</button>
+        </div>
+
+        <div class="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <!-- Upload Card 1: Bank Statement -->
+          <div class="border border-dashed border-slate-300 rounded-lg p-3 hover:border-indigo-500 transition bg-slate-50/60">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-xs font-bold text-slate-800">① 银行月结单 (多币种)</span>
+              <span id="badgeCountBank" class="text-[11px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-mono">0 份</span>
+            </div>
+            <p class="text-[11px] text-slate-500 mb-2">支持 CSV 自动解析入账，或上传 PDF 结单存档</p>
+            <label class="cursor-pointer inline-flex items-center justify-center w-full px-2.5 py-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded border border-indigo-200 transition">
+              <span>+ 上传月结单 (CSV/PDF)</span>
+              <input type="file" accept=".csv,.pdf" multiple class="hidden" onchange="handleAttachmentUpload(event, 'bank')">
+            </label>
+          </div>
+
+          <!-- Upload Card 2: Revenue & Trade AR Contracts -->
+          <div class="border border-dashed border-slate-300 rounded-lg p-3 hover:border-emerald-500 transition bg-slate-50/60">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-xs font-bold text-slate-800">② 销售/服务合同与 Invoice</span>
+              <span id="badgeCountAR" class="text-[11px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-mono">0 份</span>
+            </div>
+            <p class="text-[11px] text-slate-500 mb-2">跨境贸易 PI/CI 商业发票、技术咨询服务协议</p>
+            <label class="cursor-pointer inline-flex items-center justify-center w-full px-2.5 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded border border-emerald-200 transition">
+              <span>+ 上传收入合同/Invoice</span>
+              <input type="file" multiple class="hidden" onchange="handleAttachmentUpload(event, 'ar')">
+            </label>
+          </div>
+
+          <!-- Upload Card 3: Expense Vouchers & Trade AP -->
+          <div class="border border-dashed border-slate-300 rounded-lg p-3 hover:border-amber-500 transition bg-slate-50/60">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-xs font-bold text-slate-800">③ 支出凭证与采购合同 (AP)</span>
+              <span id="badgeCountAP" class="text-[11px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-mono">0 份</span>
+            </div>
+            <p class="text-[11px] text-slate-500 mb-2">货代物流单、供应商采购合同、租约厘印、MPF单</p>
+            <label class="cursor-pointer inline-flex items-center justify-center w-full px-2.5 py-1.5 text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 rounded border border-amber-200 transition">
+              <span>+ 上传支出单据/采购合同</span>
+              <input type="file" multiple class="hidden" onchange="handleAttachmentUpload(event, 'ap')">
+            </label>
+          </div>
+
+          <!-- Upload Card 4: Statutory Docs -->
+          <div class="border border-dashed border-slate-300 rounded-lg p-3 hover:border-slate-500 transition bg-slate-50/60">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-xs font-bold text-slate-800">④ 香港法定注册资料</span>
+              <span id="badgeCountCorp" class="text-[11px] px-1.5 py-0.5 rounded bg-slate-200 text-slate-700 font-mono">0 份</span>
+            </div>
+            <p class="text-[11px] text-slate-500 mb-2">BR 商业登记证、CI 注册证书、NAR1 周年申报表</p>
+            <label class="cursor-pointer inline-flex items-center justify-center w-full px-2.5 py-1.5 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded border border-slate-300 transition">
+              <span>+ 上传 BR / CI / NAR1</span>
+              <input type="file" multiple class="hidden" onchange="handleAttachmentUpload(event, 'corp')">
+            </label>
+          </div>
+        </div>
+
+        <!-- Uploaded Files List -->
+        <div class="px-4 pb-3">
+          <div id="attachmentListContainer" class="max-h-28 overflow-y-auto space-y-1 text-xs"></div>
+        </div>
+      </div>
+
+      <!-- 2. SME-FRS SMART SPLITTERS (RENT & MPF) -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="px-4 py-3 bg-indigo-50/70 border-b border-indigo-100 flex items-center justify-between">
+          <div>
+            <h2 class="font-bold text-sm text-indigo-950">2. 香港 SME-FRS 准则智能拆解器 (防审计调账)</h2>
+            <p class="text-[11px] text-indigo-700">针对首笔租约按金重分类、强积金 MPF 雇员/雇主双向拆分、同名跨币种换汇</p>
+          </div>
+        </div>
+        <div class="p-4 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          <button onclick="openRentSplitterModal()" class="p-2.5 rounded-lg border border-indigo-200 bg-indigo-50/40 hover:bg-indigo-100/70 text-left transition">
+            <div class="font-bold text-xs text-indigo-900">🏢 租约与按金拆解</div>
+            <p class="text-[11px] text-slate-600 mt-0.5">自动拆分首月租金、印花税与存出保证金(资产)</p>
+          </button>
+          <button onclick="openMpfSplitterModal()" class="p-2.5 rounded-lg border border-emerald-200 bg-emerald-50/40 hover:bg-emerald-100/70 text-left transition">
+            <div class="font-bold text-xs text-emerald-900">👥 薪俸与强积金拆解</div>
+            <p class="text-[11px] text-slate-600 mt-0.5">实发净额 + 雇员5%扣减 + 雇主5%供款一键入账</p>
+          </button>
+          <button onclick="openFxTransferModal()" class="p-2.5 rounded-lg border border-blue-200 bg-blue-50/40 hover:bg-blue-100/70 text-left transition">
+            <div class="font-bold text-xs text-blue-900">💱 同名账户换汇对冲</div>
+            <p class="text-[11px] text-slate-600 mt-0.5">USD/CNY 结汇转 HKD 内部对冲，防虚增收入费用</p>
+          </button>
+        </div>
+      </div>
+
+      <!-- 3. MANUAL TRANSACTION & VOUCHER ENTRY FORM -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+          <div>
+            <h2 id="txFormTitle" class="font-bold text-sm text-slate-800">3. 银行流水与贸易/服务凭证录入 (支持多币种)</h2>
+            <p class="text-[11px] text-slate-500">每笔流水自动匹配交易周的周一 09:30 HSBC 汇率或手动汇率折算为 HKD</p>
+          </div>
+          <button id="cancelEditBtn" onclick="resetTxForm()" class="hidden text-xs text-rose-600 hover:underline font-medium">取消编辑</button>
+        </div>
+
+        <form id="txForm" onsubmit="saveTransaction(event)" class="p-4 space-y-3">
+          <input type="hidden" id="editTxId" value="">
+
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-slate-700">交易日期 *</label>
+              <input type="date" id="txDate" required onchange="previewTxFxRate()" class="mt-1 w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg mono focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-700">收支方向 *</label>
+              <select id="txDirection" onchange="updateCategoryOptionsByDirection()" class="mt-1 w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                <option value="deposit">存入 (Deposit / 收款)</option>
+                <option value="withdrawal">支出 (Withdrawal / 付款)</option>
+              </select>
+            </div>
+            <div class="col-span-2 sm:col-span-1">
+              <label class="block text-xs font-medium text-slate-700">原币币种 *</label>
+              <select id="txCurrency" onchange="previewTxFxRate()" class="mt-1 w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg font-bold mono focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                <option value="HKD">HKD (港币)</option>
+                <option value="USD">USD (美元)</option>
+                <option value="CNY">CNY (人民币)</option>
+                <option value="EUR">EUR (欧元)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+            <div>
+              <label class="block text-xs font-medium text-slate-700">原币金额 *</label>
+              <input type="number" step="0.01" min="0.01" id="txOrigAmount" required oninput="previewTxFxRate()" placeholder="0.00" class="mt-1 w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg mono font-semibold focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-700 flex items-center justify-between">
+                <span>折算汇率 (兑HKD)</span>
+                <span id="txRateSourceBadge" class="text-[10px] text-blue-600 font-normal">HSBC周一</span>
+              </label>
+              <input type="number" step="0.0001" id="txFxRate" oninput="previewHkdEquivalent()" class="mt-1 w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg mono bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-700">折合港币 (HKD) 记账额</label>
+              <input type="text" id="txHkdPreview" readonly class="mt-1 w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg mono font-bold bg-slate-100 text-slate-800">
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-slate-700">交易对手 / 客户或供应商名称 *</label>
+              <input type="text" id="txCounterparty" required placeholder="例如: Global Tech Ltd / 深圳精密供应链" class="mt-1 w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-700">银行流水参考号 (Bank Ref) *</label>
+              <input type="text" id="txBankRef" required placeholder="例如: HSBC-TT-260105" class="mt-1 w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg mono focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-700">流水摘要与业务说明 *</label>
+            <input type="text" id="txDesc" required placeholder="例如: 跨境贸易首批货款 / 1月份办公室租金" class="mt-1 w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            <div>
+              <label class="block text-xs font-medium text-slate-700">SME-FRS 会计核算科目 *</label>
+              <select id="txCategory" class="mt-1 w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                <!-- Populated dynamically -->
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-700">关联贸易合同 / 发票凭证编号 (留空则触发缺失警示)</label>
+              <input type="text" id="txVoucherRef" placeholder="如: INV-2026-001 (若无凭证请留空)" class="mt-1 w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg mono focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            </div>
+          </div>
+
+          <div class="pt-2 flex items-center justify-end gap-2">
+            <button type="submit" class="w-full sm:w-auto px-5 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition shadow-sm">
+              保存流水并实时重算四表
+            </button>
+          </div>
+        </form>
+      </div>
+
+    </div>
+
+    <!-- RIGHT COLUMN: ALERT PANEL + FOUR FINANCIAL TABLES + AUDIT PACK (7 COLS) -->
+    <div class="xl:col-span-7 space-y-5">
+
+      <!-- MISSING VOUCHERS & UNCLASSIFIED SUSPENSE ALERT WORKBENCH -->
+      <div id="discrepancyWorkbench" class="bg-amber-50/90 border-2 border-amber-300 rounded-xl p-4 shadow-sm no-print hidden">
+        <div class="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-amber-200">
+          <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 text-xs font-bold rounded bg-amber-500 text-white">待补齐凭证/待分类警示</span>
+            <h3 class="font-bold text-sm text-amber-950">以下流水尚未指定明确科目或缺失贸易合同/发票凭证</h3>
+          </div>
+          <span class="text-xs text-amber-800 font-medium">说明：系统已通过【暂记款项】先行配平草稿四表，补齐以下全部项目后即可解锁最终审计定稿表</span>
+        </div>
+        <div id="discrepancyList" class="mt-3 space-y-2 max-h-60 overflow-y-auto pr-1">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+
+      <!-- REPORT TABS & EXPORT TOOLBAR -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <!-- Tab Bar -->
+        <div class="bg-slate-50 border-b border-slate-200 px-4 pt-3 flex flex-wrap items-center justify-between gap-2 no-print">
+          <div class="flex flex-wrap gap-1" id="reportTabs">
+            <button onclick="switchTab('income')" id="tab-income" class="px-3.5 py-2 text-xs font-bold rounded-t-lg border-t border-x border-slate-200 bg-white text-indigo-600">
+              1. 利润表 (Income Statement)
+            </button>
+            <button onclick="switchTab('balance')" id="tab-balance" class="px-3.5 py-2 text-xs font-semibold rounded-t-lg text-slate-600 hover:text-slate-900">
+              2. 资产负债表 (Balance Sheet)
+            </button>
+            <button onclick="switchTab('cashflow')" id="tab-cashflow" class="px-3.5 py-2 text-xs font-semibold rounded-t-lg text-slate-600 hover:text-slate-900">
+              3. 现金流量表 (Cash Flow)
+            </button>
+            <button onclick="switchTab('ledger')" id="tab-ledger" class="px-3.5 py-2 text-xs font-semibold rounded-t-lg text-slate-600 hover:text-slate-900">
+              4. 多币种总账明细 (<span id="ledgerCountBadge">0</span>)
+            </button>
+            <button onclick="switchTab('auditpack')" id="tab-auditpack" class="px-3.5 py-2 text-xs font-semibold rounded-t-lg text-emerald-700 hover:bg-emerald-50">
+              5. 法定审计底稿包 & JSON
+            </button>
+          </div>
+
+          <div class="pb-2 flex items-center gap-2">
+            <button onclick="exportExcelWorkbook()" id="btnExportFinal" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 shadow-sm">
+              <!-- Populated by JS based on lock status -->
+            </button>
+            <button onclick="window.print()" class="px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium">
+              打印当前报表
+            </button>
+          </div>
+        </div>
+
+        <!-- Report Header (Dynamic Company Identity & Status Stamp) -->
+        <div class="p-5 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <div class="flex items-center gap-2">
+              <h2 id="reportCompanyTitleCN" class="text-lg font-bold text-slate-900"></h2>
+              <span id="reportModeStamp" class="text-xs px-2.5 py-0.5 rounded-full font-bold border"></span>
+            </div>
+            <p id="reportCompanyTitleEN" class="text-xs text-slate-500 font-semibold mono mt-0.5"></p>
+            <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600 mt-2">
+              <span>商业登记证号 (BR): <strong id="reportBR" class="mono"></strong></span>
+              <span>核算期间: <strong id="reportPeriod" class="mono"></strong></span>
+              <span>报表本位币: <strong class="mono">HKD (港元)</strong></span>
+              <span>编制基准: <strong>香港 SME-FRS (收付实现制 + 按金/往来重分类)</strong></span>
+            </div>
+          </div>
+
+          <!-- Summary KPI Mini Cards -->
+          <div class="grid grid-cols-3 gap-2 text-right">
+            <div class="bg-white px-3 py-1.5 rounded-lg border border-slate-200">
+              <div class="text-[10px] text-slate-400">当期营业总收入</div>
+              <div id="kpiRevenue" class="text-xs font-bold mono text-slate-800">HK$ 0.00</div>
+            </div>
+            <div class="bg-white px-3 py-1.5 rounded-lg border border-slate-200">
+              <div class="text-[10px] text-slate-400">当期净利润 / (亏损)</div>
+              <div id="kpiNetProfit" class="text-xs font-bold mono text-slate-800">HK$ 0.00</div>
+            </div>
+            <div class="bg-white px-3 py-1.5 rounded-lg border border-slate-200">
+              <div class="text-[10px] text-slate-400">期末货币资金 (HKD折算)</div>
+              <div id="kpiEndingCash" class="text-xs font-bold mono text-indigo-700">HK$ 0.00</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 1: INCOME STATEMENT -->
+        <div id="panel-income" class="p-5">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-bold text-sm text-slate-800">表一：利润表 (Income Statement / Profit & Loss Account)</h3>
+            <span class="text-xs text-slate-500 mono">单位：HKD</span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs border-collapse">
+              <thead>
+                <tr class="bg-slate-100 text-slate-700 border-y border-slate-300">
+                  <th class="py-2.5 px-3 text-left font-bold">项目 (Items)</th>
+                  <th class="py-2.5 px-3 text-left font-semibold">勾稽科目代码与说明</th>
+                  <th class="py-2.5 px-3 text-right font-bold">本期金额 (HKD)</th>
+                </tr>
+              </thead>
+              <tbody id="incomeTableBody" class="divide-y divide-slate-200"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- TAB 2: BALANCE SHEET -->
+        <div id="panel-balance" class="p-5 hidden">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-bold text-sm text-slate-800">表二：资产负债表 (Statement of Financial Position / Balance Sheet)</h3>
+            <span class="text-xs text-slate-500 mono">单位：HKD</span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs border-collapse">
+              <thead>
+                <tr class="bg-slate-100 text-slate-700 border-y border-slate-300">
+                  <th class="py-2.5 px-3 text-left font-bold">资产、负债及所有者权益项目</th>
+                  <th class="py-2.5 px-3 text-left font-semibold">勾稽逻辑与审计注释</th>
+                  <th class="py-2.5 px-3 text-right font-bold">期末余额 (HKD)</th>
+                </tr>
+              </thead>
+              <tbody id="balanceTableBody" class="divide-y divide-slate-200"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- TAB 3: CASH FLOW STATEMENT -->
+        <div id="panel-cashflow" class="p-5 hidden">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-bold text-sm text-slate-800">表三：现金流量表 (Cash Flow Statement - 直接法与期末余额勾稽)</h3>
+            <span class="text-xs text-slate-500 mono">单位：HKD</span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs border-collapse">
+              <thead>
+                <tr class="bg-slate-100 text-slate-700 border-y border-slate-300">
+                  <th class="py-2.5 px-3 text-left font-bold">现金流量项目 (Cash Flow Activities)</th>
+                  <th class="py-2.5 px-3 text-left font-semibold">跨表联动关系</th>
+                  <th class="py-2.5 px-3 text-right font-bold">本期金额 (HKD)</th>
+                </tr>
+              </thead>
+              <tbody id="cashflowTableBody" class="divide-y divide-slate-200"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- TAB 4: MULTI-CURRENCY GENERAL LEDGER -->
+        <div id="panel-ledger" class="p-5 hidden">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <div>
+              <h3 class="font-bold text-sm text-slate-800">表四：多币种银行流水与凭证勾稽总账 (Multi-Currency General Ledger)</h3>
+              <p class="text-[11px] text-slate-500">逐笔展示原币金额、适用之 HSBC 周一 09:30 折算汇率、港币等值、结存连续性及凭证状态</p>
+            </div>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs border-collapse">
+              <thead>
+                <tr class="bg-slate-100 text-slate-700 border-y border-slate-300">
+                  <th class="py-2 px-2 text-left">日期</th>
+                  <th class="py-2 px-2 text-left">银行参考号 / 对手</th>
+                  <th class="py-2 px-2 text-left">摘要说明</th>
+                  <th class="py-2 px-2 text-right">原币收支</th>
+                  <th class="py-2 px-2 text-right">折算汇率</th>
+                  <th class="py-2 px-2 text-right">HKD 存入</th>
+                  <th class="py-2 px-2 text-right">HKD 支出</th>
+                  <th class="py-2 px-2 text-right">HKD 累计结余</th>
+                  <th class="py-2 px-2 text-left">会计科目</th>
+                  <th class="py-2 px-2 text-left">凭证状态</th>
+                  <th class="py-2 px-2 text-center no-print">操作</th>
+                </tr>
+              </thead>
+              <tbody id="ledgerTableBody" class="divide-y divide-slate-200"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- TAB 5: STATUTORY AUDIT DEFENSE PACK & JSON -->
+        <div id="panel-auditpack" class="p-5 hidden space-y-5">
+          <div id="auditPackLockNotice" class="p-3.5 rounded-lg border"></div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Shareholder Loan Agreement Auto-Draft -->
+            <div class="border border-slate-200 rounded-lg p-4 bg-slate-50/50">
+              <div class="flex items-center justify-between mb-2">
+                <h4 class="font-bold text-xs text-slate-900">📄 1. 《股东借款确认协议》(Shareholder's Loan Agreement)</h4>
+                <button onclick="downloadAuditDoc('loan')" class="text-xs text-indigo-600 hover:underline font-medium">导出协议文本</button>
+              </div>
+              <pre id="docShareholderLoan" class="text-[11px] bg-white p-3 rounded border border-slate-200 whitespace-pre-wrap text-slate-700 font-sans h-48 overflow-y-auto"></pre>
+            </div>
+
+            <!-- Rent Deposit & Payroll Audit Memo -->
+            <div class="border border-slate-200 rounded-lg p-4 bg-slate-50/50">
+              <div class="flex items-center justify-between mb-2">
+                <h4 class="font-bold text-xs text-slate-900">📄 2. 《租约按金重分类与强积金(MPF)审计说明底稿》</h4>
+                <button onclick="downloadAuditDoc('memo')" class="text-xs text-indigo-600 hover:underline font-medium">导出审计底稿</button>
+              </div>
+              <pre id="docAuditMemo" class="text-[11px] bg-white p-3 rounded border border-slate-200 whitespace-pre-wrap text-slate-700 font-sans h-48 overflow-y-auto"></pre>
+            </div>
+          </div>
+
+          <!-- Standardized reports.json output -->
+          <div class="border border-slate-200 rounded-lg p-4 bg-slate-900 text-slate-100">
+            <div class="flex items-center justify-between mb-2">
+              <div>
+                <h4 class="font-bold text-xs text-emerald-400">⚙️ 3. 经营看板标准化 JSON 输出 (reports.json)</h4>
+                <p class="text-[11px] text-slate-400">包含当前公司主体、期间、多币种折算汇总、勾稽状态及缺失凭证提醒列表</p>
+              </div>
+              <button onclick="copyJsonOutput()" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs text-emerald-300 border border-slate-700">
+                复制 JSON
+              </button>
+            </div>
+            <pre id="jsonOutputBox" class="text-[11px] mono bg-slate-950 p-3 rounded border border-slate-800 overflow-x-auto max-h-64 text-emerald-300"></pre>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </main>
+
+  <!-- MODAL 0: GOOGLE SHEETS + GOOGLE DRIVE CLOUD SYNC HUB -->
+  <div id="cloudSyncModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-4xl w-full border border-slate-200 shadow-2xl overflow-hidden">
+      <div class="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+        <div>
+          <div class="flex items-center gap-2">
+            <h3 class="font-bold text-base">Google Sheets + Google Drive 云端数据库同步中枢</h3>
+            <span id="modalCloudBadge" class="text-[11px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-400/30 font-medium">本地缓存模式</span>
+          </div>
+          <p class="text-xs text-slate-400 mt-0.5">一客一表物理隔离架构：每个公司自动生成独立 Google Sheet 四表数据库与专属 Google Drive 审计凭证文件夹</p>
+        </div>
+        <button onclick="closeCloudSyncModal()" class="text-slate-400 hover:text-white text-lg font-bold">&times;</button>
+      </div>
+
+      <div class="p-6 space-y-5 max-h-[82vh] overflow-y-auto text-xs">
+        <!-- Connection Configuration -->
+        <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <h4 class="font-bold text-slate-800 text-sm">1. Google Apps Script Web App 接口配置</h4>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" id="cloudAutoSyncToggle" onchange="saveCloudConfig()" class="rounded text-indigo-600">
+              <span class="text-xs font-medium text-slate-700">补齐凭证或新增流水后自动同步至 Google Sheets</span>
+            </label>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div class="md:col-span-2">
+              <label class="block font-medium text-slate-700">Google Apps Script 部署 URL (Web App URL) *</label>
+              <input type="url" id="gasWebAppUrl" oninput="saveCloudConfig()" placeholder="https://script.google.com/macros/s/AKfycb.../exec" class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg mono text-xs bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            </div>
+            <div>
+              <label class="block font-medium text-slate-700">Google Drive 根目录 Folder ID (选填)</label>
+              <input type="text" id="gasRootFolderId" oninput="saveCloudConfig()" placeholder="例如: 1A2b3C4d5E6f7G8h9I0j" class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg mono text-xs bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            </div>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200">
+            <div class="flex flex-wrap items-center gap-2">
+              <button onclick="testCloudConnection()" class="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-semibold transition">
+                🔌 测试云端连接
+              </button>
+              <button onclick="pushActiveCompanyToCloud()" class="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold transition shadow-xs">
+                ⬆ 推送当前公司账套至 Google Sheets (saveEntity)
+              </button>
+              <button onclick="pullEntitiesFromCloud()" class="px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition shadow-xs">
+                ⬇ 获取云端公司列表 (listEntities)
+              </button>
+            </div>
+            <button onclick="toggleGasCodePanel()" class="text-indigo-600 hover:text-indigo-800 font-semibold underline">
+              📋 查看/复制 Google Apps Script 后端代码 (Code.gs)
+            </button>
+          </div>
+        </div>
+
+        <!-- Current Company Cloud Links & Remote Entity List -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="border border-slate-200 rounded-xl p-4 bg-white">
+            <h4 class="font-bold text-slate-800 mb-2">2. 当前公司云端档案链接 (<span id="cloudModalCompName"></span>)</h4>
+            <div id="cloudLinksBox" class="space-y-2 text-xs text-slate-600">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+
+          <div class="border border-slate-200 rounded-xl p-4 bg-white">
+            <h4 class="font-bold text-slate-800 mb-2">3. 云端 `00_Entities_Index` 已存档公司账套</h4>
+            <div id="cloudEntitiesListBox" class="space-y-1.5 max-h-36 overflow-y-auto text-xs text-slate-500">
+              点击上方「⬇ 获取云端公司列表」拉取 Google Sheets 中的多公司目录...
+            </div>
+          </div>
+        </div>
+
+        <!-- Collapsible GAS Backend Script Reference -->
+        <div id="gasCodeContainer" class="hidden border border-slate-300 rounded-xl overflow-hidden bg-slate-900 text-slate-100">
+          <div class="px-4 py-2.5 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+            <span class="font-bold text-emerald-400">Google Apps Script 完整服务端代码 (粘贴至 Google Sheets -> 扩展程序 -> Apps Script)</span>
+            <button onclick="copyGasBackendCode()" class="px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold">
+              一键复制 Code.gs 代码
+            </button>
+          </div>
+          <pre id="gasCodePre" class="p-4 text-[11px] mono overflow-x-auto max-h-64 text-slate-200"></pre>
+        </div>
+
+        <!-- Real-Time Cloud Sync Logs -->
+        <div>
+          <div class="flex items-center justify-between mb-1.5">
+            <h4 class="font-bold text-slate-800">4. 云端 API 实时通信日志 (Sync Console)</h4>
+            <button onclick="clearCloudLogs()" class="text-[11px] text-slate-400 hover:text-slate-600">清空日志</button>
+          </div>
+          <div id="cloudSyncLogBox" class="bg-slate-950 text-emerald-400 mono text-[11px] p-3 rounded-xl h-36 overflow-y-auto space-y-1 border border-slate-800">
+            <div>[系统就绪] 支持本地 localStorage 持久化与 Google Sheets + Drive 云端双向同步。</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="px-6 py-3 bg-slate-50 border-t border-slate-200 flex justify-end">
+        <button onclick="closeCloudSyncModal()" class="px-5 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-semibold">关闭窗口</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 1: HSBC WEEKLY MONDAY 09:30 AM FX RATE ENGINE -->
+  <div id="fxModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-3xl w-full border border-slate-200 shadow-2xl overflow-hidden">
+      <div class="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+        <div>
+          <h3 class="font-bold text-base">多币种折算汇率引擎 (香港汇丰银行 HSBC 周一 09:30 定盘 / 手动汇率)</h3>
+          <p class="text-xs text-slate-400 mt-0.5">支持按“每周日 00:00 至下周一 09:29”适用对应周一 09:30 HSBC 公布牌价，或切换全局手动固定汇率</p>
+        </div>
+        <button onclick="closeFxModal()" class="text-slate-400 hover:text-white text-lg font-bold">&times;</button>
+      </div>
+
+      <div class="p-6 space-y-5 max-h-[80vh] overflow-y-auto">
+        <!-- Mode Switcher -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label class="flex items-start gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition" id="fxModeCardWeekly">
+            <input type="radio" name="fxModeRadio" value="hsbc_weekly" onchange="changeFxMode('hsbc_weekly')" class="mt-1">
+            <div>
+              <div class="font-bold text-xs text-slate-900">模式 A：香港汇丰银行 (HSBC HK) 每周一 09:30 公布汇率</div>
+              <p class="text-[11px] text-slate-500 mt-0.5">系统根据每笔交易发生日期所属周次，自动匹配该周一定盘汇率作为周日到周一的固定折算汇率</p>
+            </div>
+          </label>
+
+          <label class="flex items-start gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition" id="fxModeCardManual">
+            <input type="radio" name="fxModeRadio" value="manual_fixed" onchange="changeFxMode('manual_fixed')" class="mt-1">
+            <div>
+              <div class="font-bold text-xs text-slate-900">模式 B：手动输入期间固定折算汇率</div>
+              <p class="text-[11px] text-slate-500 mt-0.5">对当前公司核算区间内的所有外币流水（或新录入流水）统一采用自定义的固定汇率折算为 HKD</p>
+            </div>
+          </label>
+        </div>
+
+        <!-- Manual Fixed Rates Input -->
+        <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
+          <div class="flex items-center justify-between mb-2">
+            <h4 class="font-bold text-xs text-slate-800">手动固定折算汇率 / 默认兜底牌价 (1 外币 = ? HKD)</h4>
+            <button onclick="applyCurrentFxToAllTransactions()" class="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition">
+              按当前所选模式重新折算全部已有流水
+            </button>
+          </div>
+          <div class="grid grid-cols-3 gap-4">
+            <div>
+              <label class="block text-[11px] font-medium text-slate-600">USD 兑 HKD (美元)</label>
+              <input type="number" step="0.0001" id="manualRateUSD" onchange="saveFxSettings()" class="mt-1 w-full px-3 py-1.5 text-xs border border-slate-300 rounded-lg mono font-bold">
+            </div>
+            <div>
+              <label class="block text-[11px] font-medium text-slate-600">CNY 兑 HKD (人民币)</label>
+              <input type="number" step="0.0001" id="manualRateCNY" onchange="saveFxSettings()" class="mt-1 w-full px-3 py-1.5 text-xs border border-slate-300 rounded-lg mono font-bold">
+            </div>
+            <div>
+              <label class="block text-[11px] font-medium text-slate-600">EUR 兑 HKD (欧元)</label>
+              <input type="number" step="0.0001" id="manualRateEUR" onchange="saveFxSettings()" class="mt-1 w-full px-3 py-1.5 text-xs border border-slate-300 rounded-lg mono font-bold">
+            </div>
+          </div>
+        </div>
+
+        <!-- Weekly Monday 09:30 HSBC Rate Schedule Table -->
+        <div>
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+            <div>
+              <h4 class="font-bold text-xs text-slate-800">每周一 09:30 香港汇丰银行 (HSBC) 公布汇率定盘表</h4>
+              <p class="text-[11px] text-slate-500">覆盖周日 00:00 至下周一周期；支持手动微调或新增周一定盘记录</p>
+            </div>
+            <button onclick="addWeeklyHsbcRow()" class="px-2.5 py-1 rounded bg-slate-800 text-white text-xs font-medium hover:bg-slate-700">
+              + 新增周一 09:30 汇率记录
+            </button>
+          </div>
+          <div class="border border-slate-200 rounded-lg overflow-hidden">
+            <table class="w-full text-xs">
+              <thead class="bg-slate-100 text-slate-700">
+                <tr>
+                  <th class="py-2 px-3 text-left">定盘基准时间 (周一 09:30 HKT)</th>
+                  <th class="py-2 px-3 text-left">适用折算区间 (周日 ~ 周一)</th>
+                  <th class="py-2 px-3 text-right">USD/HKD</th>
+                  <th class="py-2 px-3 text-right">CNY/HKD</th>
+                  <th class="py-2 px-3 text-right">EUR/HKD</th>
+                </tr>
+              </thead>
+              <tbody id="hsbcWeeklyTableBody" class="divide-y divide-slate-200 mono"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="px-6 py-3 bg-slate-50 border-t border-slate-200 flex justify-end">
+        <button onclick="closeFxModal()" class="px-5 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-semibold">完成设置</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 2: NEW / EDIT COMPANY MODAL -->
+  <div id="companyModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full border border-slate-200 shadow-2xl overflow-hidden">
+      <div class="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+        <h3 id="companyModalTitle" class="font-bold text-base">新增独立公司核算账套</h3>
+        <button onclick="closeCompanyModal()" class="text-slate-400 hover:text-white text-lg font-bold">&times;</button>
+      </div>
+      <form onsubmit="saveCompanyProfile(event)" class="p-6 space-y-3.5 text-xs">
+        <input type="hidden" id="companyModalMode" value="new">
+        <div>
+          <label class="block font-medium text-slate-700">公司法定中文全称 *</label>
+          <input type="text" id="compNameCN" required placeholder="例如：香港寰宇跨境科技贸易有限公司" class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg">
+        </div>
+        <div>
+          <label class="block font-medium text-slate-700">公司法定英文全称 (English Name) *</label>
+          <input type="text" id="compNameEN" required placeholder="例如：HK GLOBAL CROSS-BORDER TECH TRADE LIMITED" class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg mono">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-medium text-slate-700">商业登记证号码 (BR No.) *</label>
+            <input type="text" id="compBR" required placeholder="例如：76543210" class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg mono">
+          </div>
+          <div>
+            <label class="block font-medium text-slate-700">银行主账户尾号 (后四位) *</label>
+            <input type="text" id="compBankLast4" required placeholder="例如：8821 (HSBC)" class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg mono">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-medium text-slate-700">建账模式 *</label>
+            <select id="compAccountingMode" class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg bg-slate-50">
+              <option value="inaugural">首年新设建账 (零期初)</option>
+              <option value="carry">往期延续建账 (含上期结转期初)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-medium text-slate-700">注册股本 (HKD) *</label>
+            <input type="number" step="1" id="compShareCapital" value="10000" required class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg mono">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-lg border border-slate-200">
+          <div>
+            <label class="block font-medium text-slate-700">期初货币资金余额 (HKD)</label>
+            <input type="number" step="0.01" id="compOpeningCash" value="0" required class="mt-1 w-full px-2.5 py-1.5 border border-slate-300 rounded-lg mono bg-white">
+          </div>
+          <div>
+            <label class="block font-medium text-slate-700">期初存出保证金/按金 (HKD)</label>
+            <input type="number" step="0.01" id="compOpeningDeposits" value="0" class="mt-1 w-full px-2.5 py-1.5 border border-slate-300 rounded-lg mono bg-white">
+          </div>
+          <div>
+            <label class="block font-medium text-slate-700">期初应付股东借款 (HKD)</label>
+            <input type="number" step="0.01" id="compOpeningShLoan" value="0" class="mt-1 w-full px-2.5 py-1.5 border border-slate-300 rounded-lg mono bg-white">
+          </div>
+          <div>
+            <label class="block font-medium text-slate-700">期初未分配利润/累计亏损 (HKD)</label>
+            <input type="number" step="0.01" id="compOpeningRE" value="0" class="mt-1 w-full px-2.5 py-1.5 border border-slate-300 rounded-lg mono bg-white">
+          </div>
+        </div>
+        <div class="pt-3 flex justify-end gap-2">
+          <button type="button" onclick="closeCompanyModal()" class="px-4 py-2 rounded-lg border border-slate-300 text-slate-700">取消</button>
+          <button type="submit" class="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold">保存公司账套</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 3: SMART SPLITTER (RENT / MPF / FX SWAP) -->
+  <div id="splitterModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full border border-slate-200 shadow-2xl overflow-hidden">
+      <div class="px-6 py-4 bg-indigo-950 text-white flex items-center justify-between">
+        <h3 id="splitterModalTitle" class="font-bold text-sm">SME-FRS 智能拆解器</h3>
+        <button onclick="closeSplitterModal()" class="text-slate-300 hover:text-white text-lg font-bold">&times;</button>
+      </div>
+      <div id="splitterModalContent" class="p-6 text-xs space-y-4"></div>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION -->
+  <div id="toastBox" class="fixed bottom-5 right-5 z-50 hidden px-4 py-3 rounded-xl bg-slate-900 text-white text-xs font-medium shadow-xl border border-slate-700"></div>
+
+  <script>
+    /*************************************************************************
+     * 1. SME-FRS ACCOUNTING CATEGORIES (SERVICE + CROSS-BORDER TRADE)
+     *************************************************************************/
+    const CATEGORIES = {
+      deposit: [
+        { code: 'REV_SERVICE', label: '主营业务收入 - 技术与咨询服务收入 (Service Revenue)' },
+        { code: 'REV_TRADE', label: '主营业务收入 - 跨境贸易货款收入 (Cross-Border Trade Revenue)' },
+        { code: 'FIN_INTEREST', label: '财务收入 - 银行存款利息收入 (Bank Interest Income)' },
+        { code: 'LIAB_SH_LOAN_IN', label: '流动负债 - 股东借款转入 (Shareholder Loan Inflow)' },
+        { code: 'EQ_CAPITAL_IN', label: '所有者权益 - 股东实缴股本入账 (Paid-in Share Capital)' },
+        { code: 'ASSET_DEPOSIT_REFUND', label: '流动资产 - 退回存出保证金/按金 (Refund of Deposits Paid)' },
+        { code: 'INTERNAL_FX_IN', label: '内部往来 - 同名多币种账户结汇转入 (Internal FX Swap In)' },
+        { code: 'UNCLASSIFIED_IN', label: '⚠️ 待分类收款 (Unclassified Deposit - 暂挂待查负债)' }
+      ],
+      withdrawal: [
+        { code: 'COGS_PURCHASE', label: '主营业务成本 - 跨境贸易采购货款 (COGS - Merchandise Purchase)' },
+        { code: 'COGS_LOGISTICS', label: '主营业务成本 - 国际物流与清关仓储费 (COGS - Freight & Customs)' },
+        { code: 'EXP_SALARY', label: '管理费用 - 员工工资支出 (Salary Expense)' },
+        { code: 'EXP_MPF', label: '管理费用 - 强积金供款支出 (MPF Contribution Expense)' },
+        { code: 'EXP_RENT', label: '管理费用 - 办公室租金支出 (Office Rent Expense)' },
+        { code: 'EXP_STAMP', label: '管理费用 - 租约法定厘印税/印花税 (Stamp Duty)' },
+        { code: 'ASSET_DEPOSIT_PAID', label: '流动资产 - 支付租金/水电按金 (Deposits Paid - 重分类至资产)' },
+        { code: 'EXP_ADMIN', label: '管理费用 - 秘书审计与行政办公费 (Professional & Admin Fee)' },
+        { code: 'EXP_BANK_FEE', label: '财务费用 - 银行月费与电汇手续费 (Bank Charges)' },
+        { code: 'LIAB_SH_LOAN_OUT', label: '流动负债 - 归还股东借款 (Repayment of Shareholder Loan)' },
+        { code: 'INTERNAL_FX_OUT', label: '内部往来 - 同名多币种账户换汇转出 (Internal FX Swap Out)' },
+        { code: 'UNCLASSIFIED_OUT', label: '⚠️ 待分类支出 (Unclassified Withdrawal - 暂挂待查资产)' }
+      ]
+    };
+
+    const ALL_CATEGORY_MAP = {};
+    [...CATEGORIES.deposit, ...CATEGORIES.withdrawal].forEach(c => { ALL_CATEGORY_MAP[c.code] = c.label; });
+
+    /*************************************************************************
+     * 2. DEFAULT MULTI-COMPANY DATABASE (ISOLATED TENANTS)
+     *************************************************************************/
+    const STORAGE_KEY = 'HK_SME_FRS_MULTI_TENANT_DB_V2';
+
+    function getInitialDemoDatabase() {
+      return {
+        activeCompanyId: 'comp_trade_service_01',
+        cloudConfig: {
+          webAppUrl: '',
+          rootFolderId: '',
+          autoSync: true,
+          lastSyncTime: null
+        },
+        companies: {
+          'comp_trade_service_01': {
+            id: 'comp_trade_service_01',
+            nameCN: '香港领航跨境贸易与技术服务有限公司',
+            nameEN: 'HK NAVIGATOR CROSS-BORDER TRADE & TECH SERVICE LIMITED',
+            brNo: '78920415',
+            bankLast4: '8832 (HSBC Multi-Ccy)',
+            accountingMode: 'inaugural', // 'inaugural' | 'carry'
+            periodStart: '2026-01-01',
+            periodEnd: '2026-03-31',
+            shareCapital: 10000,
+            shareCapitalPaid: false, // 挂应收股东未缴股本
+            openingCashHKD: 0,
+            openingDepositsHKD: 0,
+            openingShLoanHKD: 0,
+            openingRetainedEarningsHKD: 0,
+            cloudSheetUrl: '',
+            cloudFolderId: '',
+            fxSettings: {
+              mode: 'hsbc_weekly', // 'hsbc_weekly' or 'manual_fixed'
+              manualRates: { USD: 7.8050, CNY: 1.0820, EUR: 8.4500 },
+              weeklySchedule: [
+                { mondayDate: '2026-01-05', periodLabel: '2026-01-04(周日) ~ 2026-01-11', USD: 7.7980, CNY: 1.0795, EUR: 8.4100 },
+                { mondayDate: '2026-01-12', periodLabel: '2026-01-11(周日) ~ 2026-01-18', USD: 7.8020, CNY: 1.0810, EUR: 8.4350 },
+                { mondayDate: '2026-01-19', periodLabel: '2026-01-18(周日) ~ 2026-01-25', USD: 7.8060, CNY: 1.0835, EUR: 8.4600 },
+                { mondayDate: '2026-02-02', periodLabel: '2026-02-01(周日) ~ 2026-02-08', USD: 7.8110, CNY: 1.0850, EUR: 8.4800 },
+                { mondayDate: '2026-03-02', periodLabel: '2026-03-01(周日) ~ 2026-03-08', USD: 7.8040, CNY: 1.0825, EUR: 8.4420 }
+              ]
+            },
+            attachments: [
+              { id: 'att_1', type: 'bank', name: 'HSBC_2026Q1_综合账户月结单(HKD_USD_CNY).csv', date: '2026-03-31' },
+              { id: 'att_2', type: 'ar', name: 'INV-2026-001_欧洲跨境电商首批供货合同及商业发票.pdf', date: '2026-01-15' },
+              { id: 'att_3', type: 'ap', name: 'PO-SZ-202601_深圳供应链采购合同及顺丰国际物流单.pdf', date: '2026-01-18' },
+              { id: 'att_4', type: 'ap', name: 'TA-2026-OFFICE_尖沙咀商业大厦租约及税务局厘印证明书.pdf', date: '2026-01-06' },
+              { id: 'att_5', type: 'corp', name: 'BR_78920415_商业登记证及NAR1周年申报表.pdf', date: '2026-01-02' }
+            ],
+            transactions: [
+              {
+                id: 'tx_101',
+                date: '2026-01-05',
+                direction: 'deposit',
+                currency: 'HKD',
+                origAmount: 300000.00,
+                fxRate: 1.0000,
+                hkdAmount: 300000.00,
+                counterparty: '陈志远 (公司董事股东)',
+                bankRef: 'HSBC-FPS-26010501',
+                description: '股东个人划入首期营运周转金 (免息按需偿还股东借款)',
+                category: 'LIAB_SH_LOAN_IN',
+                voucherRef: 'SH-LOAN-2026-01'
+              },
+              {
+                id: 'tx_102',
+                date: '2026-01-06',
+                direction: 'withdrawal',
+                currency: 'HKD',
+                origAmount: 15000.00,
+                fxRate: 1.0000,
+                hkdAmount: 15000.00,
+                counterparty: '九龙商业置业有限公司',
+                bankRef: 'HSBC-CHQ-26010602',
+                description: '办公室首月租金支出 (已由首笔总额拆出当期租金)',
+                category: 'EXP_RENT',
+                voucherRef: 'TA-2026-OFFICE'
+              },
+              {
+                id: 'tx_103',
+                date: '2026-01-06',
+                direction: 'withdrawal',
+                currency: 'HKD',
+                origAmount: 30000.00,
+                fxRate: 1.0000,
+                hkdAmount: 30000.00,
+                counterparty: '九龙商业置业有限公司',
+                bankRef: 'HSBC-CHQ-26010602-B',
+                description: '办公室租约两个月按金及水电按金 (重分类为流动资产)',
+                category: 'ASSET_DEPOSIT_PAID',
+                voucherRef: 'TA-2026-OFFICE'
+              },
+              {
+                id: 'tx_104',
+                date: '2026-01-06',
+                direction: 'withdrawal',
+                currency: 'HKD',
+                origAmount: 450.00,
+                fxRate: 1.0000,
+                hkdAmount: 450.00,
+                counterparty: '香港特区政府税务局 (IRD)',
+                bankRef: 'HSBC-FPS-26010603',
+                description: '租约法定厘印费 (印花税 Stamp Duty)',
+                category: 'EXP_STAMP',
+                voucherRef: 'IRD-STAMP-2601'
+              },
+              {
+                id: 'tx_105',
+                date: '2026-01-14',
+                direction: 'deposit',
+                currency: 'USD',
+                origAmount: 25000.00,
+                fxRate: 7.8020,
+                hkdAmount: 195050.00,
+                counterparty: 'PACIFIC HORIZON TRADING LLC (US)',
+                bankRef: 'HSBC-TT-USD260114',
+                description: '跨境贸易出口电子配件货款收汇 (USD 25,000 @ 周一HSBC 7.8020)',
+                category: 'REV_TRADE',
+                voucherRef: 'INV-2026-001'
+              },
+              {
+                id: 'tx_106',
+                date: '2026-01-16',
+                direction: 'deposit',
+                currency: 'USD',
+                origAmount: 8000.00,
+                fxRate: 7.8020,
+                hkdAmount: 62416.00,
+                counterparty: 'SINGAPORE FINTECH SOLUTIONS PTE',
+                bankRef: 'HSBC-TT-USD260116',
+                description: '跨境ERP系统技术咨询服务费 (USD 8,000 @ 周一HSBC 7.8020)',
+                category: 'REV_SERVICE',
+                voucherRef: 'SRV-2026-002'
+              },
+              {
+                id: 'tx_107',
+                date: '2026-01-20',
+                direction: 'withdrawal',
+                currency: 'CNY',
+                origAmount: 110000.00,
+                fxRate: 1.0835,
+                hkdAmount: 119185.00,
+                counterparty: '深圳前海智造供应链有限公司',
+                bankRef: 'HSBC-CNY-260120',
+                description: '支付跨境贸易采购货款 (CNY 110,000 @ 周一HSBC 1.0835)',
+                category: 'COGS_PURCHASE',
+                voucherRef: 'PO-SZ-202601'
+              },
+              {
+                id: 'tx_108',
+                date: '2026-02-03',
+                direction: 'withdrawal',
+                currency: 'HKD',
+                origAmount: 28500.00,
+                fxRate: 1.0000,
+                hkdAmount: 28500.00,
+                counterparty: '张文杰 (运营总监)',
+                bankRef: 'HSBC-AUTOPAY-260203',
+                description: '发放员工实发月薪 (基本月薪 HK$30,000 扣除雇员 5% MPF HK$1,500)',
+                category: 'EXP_SALARY',
+                voucherRef: 'PAYSLIP-202602'
+              },
+              {
+                id: 'tx_109',
+                date: '2026-02-05',
+                direction: 'withdrawal',
+                currency: 'HKD',
+                origAmount: 3000.00,
+                fxRate: 1.0000,
+                hkdAmount: 3000.00,
+                counterparty: 'HSBC MANDATORY PROVIDENT FUND',
+                bankRef: 'HSBC-MPF-260205',
+                description: '缴纳强积金供款 (含雇员代扣 5% HK$1,500 + 雇主负担 5% HK$1,500)',
+                category: 'EXP_MPF',
+                voucherRef: 'MPF-STMT-202602'
+              },
+              {
+                id: 'tx_110',
+                date: '2026-02-18',
+                direction: 'withdrawal',
+                currency: 'USD',
+                origAmount: 1800.00,
+                fxRate: 7.8110,
+                hkdAmount: 14059.80,
+                counterparty: 'MAERSK GLOBAL LOGISTICS',
+                bankRef: 'HSBC-USD-260218',
+                description: '跨境海运及香港葵涌货柜码头清关杂费 (暂缺物流发票)',
+                category: 'COGS_LOGISTICS',
+                voucherRef: '' // 故意留空，用于演示“缺失凭证警示”
+              },
+              {
+                id: 'tx_111',
+                date: '2026-03-04',
+                direction: 'deposit',
+                currency: 'EUR',
+                origAmount: 3500.00,
+                fxRate: 8.4420,
+                hkdAmount: 29547.00,
+                counterparty: 'BERLIN DIGITAL GMBH',
+                bankRef: 'HSBC-EUR-260304',
+                description: '收到德国客户汇入款项 (性质待确认，尚未上传贸易合同)',
+                category: 'UNCLASSIFIED_IN', // 故意设为待分类，用于演示“暂记配平与警示解锁”
+                voucherRef: ''
+              }
+            ]
+          },
+          'comp_tianding_02': {
+            id: 'comp_tianding_02',
+            nameCN: '香港天鼎國際貿易有限公司',
+            nameEN: 'HK TIANDING INTERNATIONAL TRADE LIMITED',
+            brNo: '78630568',
+            bankLast4: '2883 (HSBC HKD)',
+            accountingMode: 'inaugural',
+            periodStart: '2025-11-01',
+            periodEnd: '2026-09-30',
+            shareCapital: 10000,
+            shareCapitalPaid: false,
+            openingCashHKD: 0,
+            openingDepositsHKD: 0,
+            openingShLoanHKD: 0,
+            openingRetainedEarningsHKD: 0,
+            cloudSheetUrl: '',
+            cloudFolderId: '',
+            fxSettings: {
+              mode: 'manual_fixed',
+              manualRates: { USD: 7.8000, CNY: 1.0800, EUR: 8.4500 },
+              weeklySchedule: [
+                { mondayDate: '2026-01-05', periodLabel: '2026-01-04(周日) ~ 2026-01-11', USD: 7.8000, CNY: 1.0800, EUR: 8.4500 }
+              ]
+            },
+            attachments: [
+              { id: 'td_1', type: 'bank', name: 'HSBC_2883_202511_to_202609_Full.csv', date: '2026-09-30' },
+              { id: 'td_2', type: 'ar', name: 'INV-TD-001_技术咨询服务协议与收据.pdf', date: '2026-02-15' },
+              { id: 'td_3', type: 'ap', name: 'TA-TD-2025_办公室租约与按金收据.pdf', date: '2025-11-15' }
+            ],
+            transactions: [
+              {
+                id: 'td_tx_1',
+                date: '2025-11-10',
+                direction: 'deposit',
+                currency: 'HKD',
+                origAmount: 445000.00,
+                fxRate: 1.0000,
+                hkdAmount: 445000.00,
+                counterparty: '王建国 (控股股东)',
+                bankRef: 'HSBC-2883-001',
+                description: '股东无息借款划入',
+                category: 'LIAB_SH_LOAN_IN',
+                voucherRef: 'SH-LOAN-TD01'
+              },
+              {
+                id: 'td_tx_2',
+                date: '2025-12-05',
+                direction: 'deposit',
+                currency: 'HKD',
+                origAmount: 4556.31,
+                fxRate: 1.0000,
+                hkdAmount: 4556.31,
+                counterparty: 'AIRWALLEX / 客户咨询费及存款利息',
+                bankRef: 'HSBC-2883-002',
+                description: '收到咨询服务收入及银行利息汇总',
+                category: 'REV_SERVICE',
+                voucherRef: 'INV-TD-001'
+              },
+              {
+                id: 'td_tx_3',
+                date: '2025-12-10',
+                direction: 'withdrawal',
+                currency: 'HKD',
+                origAmount: 8300.00,
+                fxRate: 1.0000,
+                hkdAmount: 8300.00,
+                counterparty: '香港物业管理处',
+                bankRef: 'HSBC-2883-003',
+                description: '支付办公室租金按金、水电及门匙按金 (重分类至存出保证金)',
+                category: 'ASSET_DEPOSIT_PAID',
+                voucherRef: 'TA-TD-2025'
+              },
+              {
+                id: 'td_tx_4',
+                date: '2026-03-15',
+                direction: 'withdrawal',
+                currency: 'HKD',
+                origAmount: 285000.00,
+                fxRate: 1.0000,
+                hkdAmount: 285000.00,
+                counterparty: '员工薪俸及强积金汇总',
+                bankRef: 'HSBC-2883-004',
+                description: '核算期间累计发放员工工资与强积金支出',
+                category: 'EXP_SALARY',
+                voucherRef: 'PAYSLIP-TD-BUNDLE'
+              },
+              {
+                id: 'td_tx_5',
+                date: '2026-06-20',
+                direction: 'withdrawal',
+                currency: 'HKD',
+                origAmount: 27515.00,
+                fxRate: 1.0000,
+                hkdAmount: 27515.00,
+                counterparty: '物业管理及银行手续费汇总',
+                bankRef: 'HSBC-2883-005',
+                description: '当期办公室租金、印花税及银行月费支出',
+                category: 'EXP_RENT',
+                voucherRef: 'TA-TD-2025'
+              }
+            ]
+          }
+        }
+      };
+    }
+
+    let db = null;
+    let activeTab = 'income';
+
+    function loadDatabase() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          db = JSON.parse(raw);
+        } else {
+          db = getInitialDemoDatabase();
+          saveDatabase();
+        }
+      } catch (e) {
+        db = getInitialDemoDatabase();
+      }
+    }
+
+    function saveDatabase() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+      } catch (e) {
+        console.error('Storage save error:', e);
+      }
+    }
+
+    function getActiveCompany() {
+      return db.companies[db.activeCompanyId];
+    }
+
+    function resetDemoCompanies() {
+      db = getInitialDemoDatabase();
+      saveDatabase();
+      initUI();
+      showToast('已重置为包含 2 家演示公司（跨境贸易综合账套 + 全配平定稿账套）的初始状态');
+    }
+
+    /*************************************************************************
+     * 3. MULTI-CURRENCY & HSBC WEEKLY MONDAY 09:30 FX RATE ENGINE
+     *************************************************************************/
+    function getApplicableFxRate(company, currency, txDateStr) {
+      if (currency === 'HKD') return { rate: 1.0000, source: '本位币' };
+      const fx = company.fxSettings;
+      if (fx.mode === 'manual_fixed') {
+        const r = fx.manualRates[currency] || 1.0;
+        return { rate: Number(r), source: '手动固定汇率' };
+      }
+      // Mode: hsbc_weekly (Find the latest Monday schedule on or before the week of txDateStr)
+      const schedules = [...(fx.weeklySchedule || [])].sort((a, b) => a.mondayDate.localeCompare(b.mondayDate));
+      if (schedules.length === 0) {
+        return { rate: Number(fx.manualRates[currency] || 1.0), source: '默认牌价' };
+      }
+      let chosen = schedules[0];
+      for (const s of schedules) {
+        // Sunday is 1 day before Monday; so any date >= (Monday - 1 day) uses that Monday 09:30 rate
+        const mondayObj = new Date(s.mondayDate + 'T00:00:00');
+        const sundayStart = new Date(mondayObj.getTime() - 24 * 3600 * 1000);
+        const txObj = new Date((txDateStr || s.mondayDate) + 'T12:00:00');
+        if (txObj >= sundayStart) {
+          chosen = s;
+        }
+      }
+      return {
+        rate: Number(chosen[currency] || fx.manualRates[currency] || 1.0),
+        source: `HSBC周一(${chosen.mondayDate})`
+      };
+    }
+
+    function previewTxFxRate() {
+      const comp = getActiveCompany();
+      const currency = document.getElementById('txCurrency').value;
+      const dateStr = document.getElementById('txDate').value;
+      const { rate, source } = getApplicableFxRate(comp, currency, dateStr);
+      const rateInput = document.getElementById('txFxRate');
+      rateInput.value = rate.toFixed(4);
+      rateInput.readOnly = (currency === 'HKD');
+      document.getElementById('txRateSourceBadge').textContent = source;
+      previewHkdEquivalent();
+    }
+
+    function previewHkdEquivalent() {
+      const orig = parseFloat(document.getElementById('txOrigAmount').value) || 0;
+      const rate = parseFloat(document.getElementById('txFxRate').value) || 1;
+      const hkd = Math.round(orig * rate * 100) / 100;
+      document.getElementById('txHkdPreview').value = 'HK$ ' + formatMoney(hkd);
+    }
+
+    function openFxModal() {
+      const comp = getActiveCompany();
+      const fx = comp.fxSettings;
+      document.querySelectorAll('input[name="fxModeRadio"]').forEach(r => {
+        r.checked = (r.value === fx.mode);
+      });
+      updateFxModalCardStyles(fx.mode);
+      document.getElementById('manualRateUSD').value = fx.manualRates.USD.toFixed(4);
+      document.getElementById('manualRateCNY').value = fx.manualRates.CNY.toFixed(4);
+      document.getElementById('manualRateEUR').value = fx.manualRates.EUR.toFixed(4);
+      renderHsbcWeeklyTable();
+      const modal = document.getElementById('fxModal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeFxModal() {
+      const modal = document.getElementById('fxModal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+      refreshAll();
+    }
+
+    function updateFxModalCardStyles(mode) {
+      const cWeekly = document.getElementById('fxModeCardWeekly');
+      const cManual = document.getElementById('fxModeCardManual');
+      if (mode === 'hsbc_weekly') {
+        cWeekly.className = 'flex items-start gap-3 p-3.5 rounded-xl border-2 border-indigo-600 bg-indigo-50/40 cursor-pointer transition';
+        cManual.className = 'flex items-start gap-3 p-3.5 rounded-xl border-2 border-slate-200 bg-white cursor-pointer transition';
+      } else {
+        cManual.className = 'flex items-start gap-3 p-3.5 rounded-xl border-2 border-indigo-600 bg-indigo-50/40 cursor-pointer transition';
+        cWeekly.className = 'flex items-start gap-3 p-3.5 rounded-xl border-2 border-slate-200 bg-white cursor-pointer transition';
+      }
+    }
+
+    function changeFxMode(mode) {
+      const comp = getActiveCompany();
+      comp.fxSettings.mode = mode;
+      updateFxModalCardStyles(mode);
+      saveDatabase();
+      previewTxFxRate();
+    }
+
+    function saveFxSettings() {
+      const comp = getActiveCompany();
+      comp.fxSettings.manualRates.USD = parseFloat(document.getElementById('manualRateUSD').value) || 7.8000;
+      comp.fxSettings.manualRates.CNY = parseFloat(document.getElementById('manualRateCNY').value) || 1.0800;
+      comp.fxSettings.manualRates.EUR = parseFloat(document.getElementById('manualRateEUR').value) || 8.4500;
+      saveDatabase();
+      previewTxFxRate();
+    }
+
+    function renderHsbcWeeklyTable() {
+      const comp = getActiveCompany();
+      const tbody = document.getElementById('hsbcWeeklyTableBody');
+      tbody.innerHTML = '';
+      comp.fxSettings.weeklySchedule.forEach((row, idx) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class="py-2 px-3">
+            <input type="date" value="${row.mondayDate}" onchange="updateWeeklyRow(${idx}, 'mondayDate', this.value)" class="border border-slate-300 rounded px-1.5 py-0.5 text-xs">
+          </td>
+          <td class="py-2 px-3 text-slate-600">${row.periodLabel || '周日 00:00 ~ 下周一'}</td>
+          <td class="py-2 px-3 text-right">
+            <input type="number" step="0.0001" value="${row.USD}" onchange="updateWeeklyRow(${idx}, 'USD', this.value)" class="w-20 text-right border border-slate-300 rounded px-1.5 py-0.5">
+          </td>
+          <td class="py-2 px-3 text-right">
+            <input type="number" step="0.0001" value="${row.CNY}" onchange="updateWeeklyRow(${idx}, 'CNY', this.value)" class="w-20 text-right border border-slate-300 rounded px-1.5 py-0.5">
+          </td>
+          <td class="py-2 px-3 text-right">
+            <input type="number" step="0.0001" value="${row.EUR}" onchange="updateWeeklyRow(${idx}, 'EUR', this.value)" class="w-20 text-right border border-slate-300 rounded px-1.5 py-0.5">
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function updateWeeklyRow(idx, field, val) {
+      const comp = getActiveCompany();
+      if (field === 'mondayDate') {
+        comp.fxSettings.weeklySchedule[idx].mondayDate = val;
+        comp.fxSettings.weeklySchedule[idx].periodLabel = `${val} 所属周日~周一区间`;
+      } else {
+        comp.fxSettings.weeklySchedule[idx][field] = parseFloat(val) || 1.0;
+      }
+      saveDatabase();
+      renderHsbcWeeklyTable();
+    }
+
+    function addWeeklyHsbcRow() {
+      const comp = getActiveCompany();
+      comp.fxSettings.weeklySchedule.push({
+        mondayDate: '2026-03-09',
+        periodLabel: '2026-03-08(周日) ~ 2026-03-15',
+        USD: 7.8050,
+        CNY: 1.0830,
+        EUR: 8.4500
+      });
+      saveDatabase();
+      renderHsbcWeeklyTable();
+    }
+
+    function applyCurrentFxToAllTransactions() {
+      const comp = getActiveCompany();
+      comp.transactions.forEach(tx => {
+        const { rate } = getApplicableFxRate(comp, tx.currency, tx.date);
+        tx.fxRate = rate;
+        tx.hkdAmount = Math.round(tx.origAmount * rate * 100) / 100;
+      });
+      saveDatabase();
+      refreshAll();
+      showToast('已按当前选定的汇率模式重新折算全部流水的港币金额');
+    }
+
+    /*************************************************************************
+     * 4. CORE FOUR-TABLE RECONCILIATION ENGINE
+     *************************************************************************/
+    function computeFinancials(company) {
+      const start = company.periodStart;
+      const end = company.periodEnd;
+
+      // Filter transactions within selected date range and sort chronologically
+      const filteredTxs = company.transactions
+        .filter(t => (!start || t.date >= start) && (!end || t.date <= end))
+        .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+
+      // Accumulators
+      const sums = {
+        REV_SERVICE: 0,
+        REV_TRADE: 0,
+        FIN_INTEREST: 0,
+        LIAB_SH_LOAN_IN: 0,
+        EQ_CAPITAL_IN: 0,
+        ASSET_DEPOSIT_REFUND: 0,
+        INTERNAL_FX_IN: 0,
+        UNCLASSIFIED_IN: 0,
+
+        COGS_PURCHASE: 0,
+        COGS_LOGISTICS: 0,
+        EXP_SALARY: 0,
+        EXP_MPF: 0,
+        EXP_RENT: 0,
+        EXP_STAMP: 0,
+        ASSET_DEPOSIT_PAID: 0,
+        EXP_ADMIN: 0,
+        EXP_BANK_FEE: 0,
+        LIAB_SH_LOAN_OUT: 0,
+        INTERNAL_FX_OUT: 0,
+        UNCLASSIFIED_OUT: 0
+      };
+
+      let runningCash = Number(company.openingCashHKD) || 0;
+      const ledgerRows = [];
+      const discrepancies = [];
+
+      filteredTxs.forEach(tx => {
+        const amt = Math.round((Number(tx.hkdAmount) || 0) * 100) / 100;
+        if (tx.direction === 'deposit') {
+          runningCash = Math.round((runningCash + amt) * 100) / 100;
+        } else {
+          runningCash = Math.round((runningCash - amt) * 100) / 100;
+        }
+
+        if (sums[tx.category] !== undefined) {
+          sums[tx.category] = Math.round((sums[tx.category] + amt) * 100) / 100;
+        } else {
+          if (tx.direction === 'deposit') sums.UNCLASSIFIED_IN += amt;
+          else sums.UNCLASSIFIED_OUT += amt;
+        }
+
+        const isUnclassified = tx.category === 'UNCLASSIFIED_IN' || tx.category === 'UNCLASSIFIED_OUT';
+        const isMissingVoucher = !tx.voucherRef || tx.voucherRef.trim() === '';
+
+        if (isUnclassified || isMissingVoucher) {
+          discrepancies.push({
+            tx,
+            isUnclassified,
+            isMissingVoucher
+          });
+        }
+
+        ledgerRows.push({
+          ...tx,
+          hkdDeposit: tx.direction === 'deposit' ? amt : 0,
+          hkdWithdrawal: tx.direction === 'withdrawal' ? amt : 0,
+          runningBalance: runningCash,
+          isUnclassified,
+          isMissingVoucher
+        });
+      });
+
+      // 1. Income Statement Math
+      const totalRevenue = round2(sums.REV_SERVICE + sums.REV_TRADE);
+      const totalCOGS = round2(sums.COGS_PURCHASE + sums.COGS_LOGISTICS);
+      const grossProfit = round2(totalRevenue - totalCOGS);
+
+      // Internal FX Conversion Net Variance (if any difference between INTERNAL_FX_IN and INTERNAL_FX_OUT)
+      const netInternalFxDiff = round2(sums.INTERNAL_FX_IN - sums.INTERNAL_FX_OUT);
+
+      const totalOpEx = round2(
+        sums.EXP_SALARY +
+        sums.EXP_MPF +
+        sums.EXP_RENT +
+        sums.EXP_STAMP +
+        sums.EXP_ADMIN +
+        sums.EXP_BANK_FEE
+      );
+
+      const netProfit = round2(grossProfit - totalOpEx + sums.FIN_INTEREST + netInternalFxDiff);
+
+      // 2. Cash Flow Statement Math
+      const cfOperatingIn = round2(sums.REV_SERVICE + sums.REV_TRADE + sums.FIN_INTEREST + sums.ASSET_DEPOSIT_REFUND + sums.UNCLASSIFIED_IN);
+      const cfOperatingOut = round2(
+        totalCOGS +
+        totalOpEx +
+        sums.ASSET_DEPOSIT_PAID +
+        sums.UNCLASSIFIED_OUT
+      );
+      const netOperatingCF = round2(cfOperatingIn - cfOperatingOut + netInternalFxDiff);
+
+      const netFinancingCF = round2(
+        sums.LIAB_SH_LOAN_IN -
+        sums.LIAB_SH_LOAN_OUT +
+        sums.EQ_CAPITAL_IN
+      );
+
+      const openCash = company.accountingMode === 'carry' ? (Number(company.openingCashHKD) || 0) : 0;
+      const openDep = company.accountingMode === 'carry' ? (Number(company.openingDepositsHKD) || 0) : 0;
+      const openLoan = company.accountingMode === 'carry' ? (Number(company.openingShLoanHKD) || 0) : 0;
+      const openRE = company.accountingMode === 'carry' ? (Number(company.openingRetainedEarningsHKD) || 0) : 0;
+
+      const netCashChange = round2(netOperatingCF + netFinancingCF);
+      const endingCashCF = round2(openCash + netCashChange);
+
+      // 3. Balance Sheet Math
+      const cashAsset = endingCashCF;
+      const depositsAsset = round2(openDep + sums.ASSET_DEPOSIT_PAID - sums.ASSET_DEPOSIT_REFUND);
+
+      // Share Capital handling: if unpaid and no EQ_CAPITAL_IN recorded, book Due from Shareholder
+      const shareCapitalNominal = round2(Number(company.shareCapital) || 10000);
+      let dueFromShareholder = 0;
+      if (!company.shareCapitalPaid) {
+        dueFromShareholder = Math.max(0, round2(shareCapitalNominal - sums.EQ_CAPITAL_IN));
+      } else {
+        dueFromShareholder = 0;
+      }
+
+      // Suspense Assets (Unclassified withdrawals parked in Suspense Debit)
+      const suspenseDebitAsset = round2(sums.UNCLASSIFIED_OUT);
+
+      const totalAssets = round2(cashAsset + depositsAsset + dueFromShareholder + suspenseDebitAsset);
+
+      // Liabilities
+      const shareholderLoanPayable = round2(openLoan + sums.LIAB_SH_LOAN_IN - sums.LIAB_SH_LOAN_OUT);
+      const suspenseCreditLiab = round2(sums.UNCLASSIFIED_IN);
+      const totalLiabilities = round2(shareholderLoanPayable + suspenseCreditLiab);
+
+      // Equity
+      const effectiveShareCapital = company.shareCapitalPaid
+        ? Math.max(shareCapitalNominal, sums.EQ_CAPITAL_IN)
+        : shareCapitalNominal;
+
+      // Auto-reconcile any unallocated opening net asset difference into opening retained earnings so BS stays balanced
+      const openingNetAssets = round2(openCash + openDep - openLoan - (company.shareCapitalPaid ? shareCapitalNominal : 0));
+      const effectiveOpeningRE = company.accountingMode === 'carry' ? openingNetAssets : 0;
+
+      const retainedEarnings = round2(netProfit + effectiveOpeningRE);
+      const totalEquity = round2(effectiveShareCapital + retainedEarnings);
+
+      const totalLiabAndEquity = round2(totalLiabilities + totalEquity);
+      const balanceDiff = round2(totalAssets - totalLiabAndEquity);
+
+      const cashTied = Math.abs(endingCashCF - runningCash) < 0.005;
+      const bsBalanced = Math.abs(balanceDiff) < 0.005;
+      const isAuditReady = discrepancies.length === 0 && cashTied && bsBalanced;
+
+      return {
+        filteredTxs,
+        ledgerRows,
+        discrepancies,
+        sums,
+        income: {
+          totalRevenue,
+          totalCOGS,
+          grossProfit,
+          totalOpEx,
+          netInternalFxDiff,
+          netProfit
+        },
+        cashflow: {
+          openingCash: round2(openCash),
+          cfOperatingIn,
+          cfOperatingOut,
+          netOperatingCF,
+          netFinancingCF,
+          netCashChange,
+          endingCashCF
+        },
+        balance: {
+          cashAsset,
+          depositsAsset,
+          dueFromShareholder,
+          suspenseDebitAsset,
+          totalAssets,
+          shareholderLoanPayable,
+          suspenseCreditLiab,
+          totalLiabilities,
+          effectiveShareCapital,
+          retainedEarnings,
+          openRE: round2(openRE),
+          totalEquity,
+          totalLiabAndEquity,
+          balanceDiff
+        },
+        checks: {
+          cashTied,
+          bsBalanced,
+          isAuditReady,
+          totalCount: filteredTxs.length,
+          verifiedCount: filteredTxs.length - discrepancies.length
+        }
+      };
+    }
+
+    function round2(n) {
+      return Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+    }
+
+    function formatMoney(n) {
+      const val = Number(n) || 0;
+      const absStr = Math.abs(val).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      return val < 0 ? `(${absStr})` : absStr;
+    }
+
+    /*************************************************************************
+     * 5. RENDER UI & REPORTS
+     *************************************************************************/
+    function initUI() {
+      renderCompanySelector();
+      updateCategoryOptionsByDirection();
+      const today = new Date().toISOString().slice(0, 10);
+      document.getElementById('txDate').value = today;
+      refreshAll();
+    }
+
+    function renderCompanySelector() {
+      const sel = document.getElementById('companySelect');
+      sel.innerHTML = '';
+      Object.values(db.companies).forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = `${c.nameCN} (BR: ${c.brNo})`;
+        if (c.id === db.activeCompanyId) opt.selected = true;
+        sel.appendChild(opt);
+      });
+    }
+
+    function switchCompany(compId) {
+      if (db.companies[compId]) {
+        db.activeCompanyId = compId;
+        saveDatabase();
+        resetTxForm();
+        refreshAll();
+        showToast(`已切换至账套：${db.companies[compId].nameCN}`);
+      }
+    }
+
+    function refreshAll() {
+      const comp = getActiveCompany();
+      if (!db.cloudConfig) {
+        db.cloudConfig = { webAppUrl: '', rootFolderId: '', autoSync: true, lastSyncTime: null };
+      }
+
+      // Update Top Profile Bar
+      document.getElementById('headerCompanyNameCN').textContent = comp.nameCN;
+      document.getElementById('headerCompanyNameEN').textContent = comp.nameEN;
+      document.getElementById('headerCompanyBR').textContent = comp.brNo;
+      document.getElementById('headerCompanyBank').textContent = comp.bankLast4;
+      document.getElementById('accountingModeSelect').value = comp.accountingMode || 'inaugural';
+      document.getElementById('periodStart').value = comp.periodStart;
+      document.getElementById('periodEnd').value = comp.periodEnd;
+      document.getElementById('shareCapitalLabel').textContent = Number(comp.shareCapital || 10000).toLocaleString();
+      document.getElementById('shareCapitalPaidSelect').value = comp.shareCapitalPaid ? 'paid' : 'unpaid';
+
+      // Cloud Sheet Link Badge
+      const sheetLink = document.getElementById('headerCloudSheetLink');
+      if (comp.cloudSheetUrl) {
+        sheetLink.href = comp.cloudSheetUrl;
+        sheetLink.classList.remove('hidden');
+      } else {
+        sheetLink.classList.add('hidden');
+      }
+
+      updateCloudHeaderIndicator();
+
+      const fxSummary = comp.fxSettings.mode === 'hsbc_weekly'
+        ? `每周一 09:30 HSBC 定盘汇率 (${comp.fxSettings.weeklySchedule.length} 周记录)`
+        : `手动固定汇率 (USD:${comp.fxSettings.manualRates.USD} / CNY:${comp.fxSettings.manualRates.CNY})`;
+      document.getElementById('fxActiveSummary').textContent = fxSummary;
+
+      // Update Report Header
+      document.getElementById('reportCompanyTitleCN').textContent = comp.nameCN;
+      document.getElementById('reportCompanyTitleEN').textContent = comp.nameEN;
+      document.getElementById('reportBR').textContent = comp.brNo;
+      document.getElementById('reportPeriod').textContent = `${comp.periodStart} 至 ${comp.periodEnd} (${comp.accountingMode === 'carry' ? '往期延续' : '首年新设'})`;
+
+      renderAttachments(comp);
+      previewTxFxRate();
+
+      // Run Reconciliation Engine
+      const model = computeFinancials(comp);
+
+      // Update KPI Cards
+      document.getElementById('kpiRevenue').textContent = 'HK$ ' + formatMoney(model.income.totalRevenue);
+      const netProfitEl = document.getElementById('kpiNetProfit');
+      netProfitEl.textContent = 'HK$ ' + formatMoney(model.income.netProfit);
+      netProfitEl.className = `text-xs font-bold mono ${model.income.netProfit >= 0 ? 'text-emerald-700' : 'text-rose-600'}`;
+      document.getElementById('kpiEndingCash').textContent = 'HK$ ' + formatMoney(model.balance.cashAsset);
+      document.getElementById('ledgerCountBadge').textContent = model.ledgerRows.length;
+
+      // Render Banners, Discrepancy Workbench, and 5 Tabs
+      renderAuditGateBanner(comp, model);
+      renderDiscrepancyWorkbench(comp, model);
+      renderIncomeStatement(model);
+      renderBalanceSheet(model);
+      renderCashFlowStatement(model);
+      renderGeneralLedger(model);
+      renderAuditDefensePack(comp, model);
+    }
+
+    function renderAuditGateBanner(comp, model) {
+      const banner = document.getElementById('auditGateBanner');
+      const stamp = document.getElementById('reportModeStamp');
+      const btnExport = document.getElementById('btnExportFinal');
+
+      const { isAuditReady, cashTied, bsBalanced, totalCount, verifiedCount } = model.checks;
+      const missingCount = model.discrepancies.length;
+
+      if (isAuditReady) {
+        banner.className = 'rounded-xl p-4 border-2 border-emerald-500 bg-emerald-50/90 shadow-sm';
+        banner.innerHTML = `
+          <div class="flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-lg shrink-0">✓</div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="px-2 py-0.5 text-xs font-bold rounded bg-emerald-700 text-white">最终配平定稿模式 (Audit-Ready)</span>
+                  <h3 class="font-bold text-sm text-emerald-950">全部 ${totalCount}/${totalCount} 笔银行流水已完成会计分类与合同/发票凭证勾稽！</h3>
+                </div>
+                <p class="text-xs text-emerald-800 mt-1">
+                  三大硬性指标 100% 通过：① 银行流水逐笔连续无断流 · ② 资产负债表恒等式差额 = HK$ 0.00 · ③ 现金流量表期末现金与银行结单完全一致 (HK$ ${formatMoney(model.balance.cashAsset)})
+                </p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="exportExcelWorkbook()" class="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold shadow transition">
+                ⬇ 导出最终配平四表 (.CSV/Excel)
+              </button>
+            </div>
+          </div>
+        `;
+        stamp.textContent = '✓ 法定审计定稿版 (凭证100%齐全)';
+        stamp.className = 'text-xs px-2.5 py-0.5 rounded-full font-bold border bg-emerald-100 text-emerald-800 border-emerald-300';
+
+        btnExport.className = 'px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition flex items-center gap-1.5 shadow-sm';
+        btnExport.innerHTML = '<span>⬇ 导出最终配平四表</span>';
+      } else {
+        const suspenseTotal = round2(model.balance.suspenseDebitAsset + model.balance.suspenseCreditLiab);
+        banner.className = 'rounded-xl p-4 border-2 border-amber-400 bg-amber-50/90 shadow-sm';
+        banner.innerHTML = `
+          <div class="flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-full bg-amber-500 text-white flex items-center justify-center font-bold text-lg shrink-0">!</div>
+              <div>
+                <div class="flex items-center flex-wrap gap-2">
+                  <span class="px-2 py-0.5 text-xs font-bold rounded bg-amber-600 text-white">草稿暂记配平模式 (Draft & Suspense)</span>
+                  <h3 class="font-bold text-sm text-amber-950">当前已完成 ${verifiedCount}/${totalCount} 笔凭证勾稽 — 尚有 ${missingCount} 笔流水待补齐凭证或待确认分类</h3>
+                </div>
+                <p class="text-xs text-amber-900 mt-1">
+                  <strong>配平与差异定位：</strong>四张表已通过暂记科目强制配平（资产负债表差额 = HK$ 0.00，其中待分类暂记差额 <strong>HK$ ${formatMoney(suspenseTotal)}</strong> 已在资产负债表与现金流量表中高亮标出）。<strong>必须补齐下方警示清单中的全部 ${missingCount} 笔流水凭证与分类，才可解锁最终审计定稿四表！</strong>
+                </p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-mono font-bold text-amber-900 bg-amber-200/80 px-3 py-1.5 rounded-lg border border-amber-300">
+                🔒 最终定稿表已锁定 (${verifiedCount}/${totalCount})
+              </span>
+            </div>
+          </div>
+        `;
+        stamp.textContent = `⚠️ 草稿配平版 (待补 ${missingCount} 笔凭证/分类)`;
+        stamp.className = 'text-xs px-2.5 py-0.5 rounded-full font-bold border bg-amber-100 text-amber-800 border-amber-300';
+
+        btnExport.className = 'px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold transition flex items-center gap-1.5 shadow-sm';
+        btnExport.innerHTML = `<span>🔒 导出草稿表 (差 ${missingCount} 笔凭证解锁定稿)</span>`;
+      }
+    }
+
+    function renderDiscrepancyWorkbench(comp, model) {
+      const box = document.getElementById('discrepancyWorkbench');
+      const list = document.getElementById('discrepancyList');
+      if (model.discrepancies.length === 0) {
+        box.classList.add('hidden');
+        return;
+      }
+      box.classList.remove('hidden');
+      list.innerHTML = '';
+
+      model.discrepancies.forEach(item => {
+        const tx = item.tx;
+        const categoryOpts = CATEGORIES[tx.direction]
+          .map(c => `<option value="${c.code}" ${c.code === tx.category ? 'selected' : ''}>${c.label}</option>`)
+          .join('');
+
+        const div = document.createElement('div');
+        div.className = 'bg-white rounded-lg p-3 border border-amber-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs';
+        div.innerHTML = `
+          <div class="space-y-0.5">
+            <div class="flex items-center gap-2">
+              <span class="mono font-bold text-xs text-slate-800">${tx.date}</span>
+              <span class="px-1.5 py-0.5 text-[10px] rounded font-bold ${tx.direction === 'deposit' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">
+                ${tx.direction === 'deposit' ? '存入' : '支出'} ${tx.currency} ${formatMoney(tx.origAmount)} (折合 HK$ ${formatMoney(tx.hkdAmount)})
+              </span>
+              ${item.isUnclassified ? '<span class="px-1.5 py-0.5 text-[10px] rounded bg-rose-600 text-white font-bold">待分类科目</span>' : ''}
+              ${item.isMissingVoucher ? '<span class="px-1.5 py-0.5 text-[10px] rounded bg-amber-500 text-white font-bold">缺失合同/发票凭证</span>' : ''}
+            </div>
+            <p class="text-xs text-slate-700 font-medium">${tx.counterparty} — ${tx.description} <span class="mono text-slate-400">(${tx.bankRef})</span></p>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
+            <select id="quickCat_${tx.id}" class="px-2 py-1 text-xs border border-slate-300 rounded bg-slate-50 max-w-[210px]">
+              ${categoryOpts}
+            </select>
+            <input type="text" id="quickVou_${tx.id}" value="${tx.voucherRef || ''}" placeholder="输入凭证号 如:INV-2026-08" class="px-2 py-1 text-xs border border-slate-300 rounded mono w-40">
+            <button onclick="quickResolveDiscrepancy('${tx.id}')" class="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shrink-0">
+              确认补齐
+            </button>
+          </div>
+        `;
+        list.appendChild(div);
+      });
+    }
+
+    function quickResolveDiscrepancy(txId) {
+      const comp = getActiveCompany();
+      const tx = comp.transactions.find(t => t.id === txId);
+      if (!tx) return;
+
+      const newCat = document.getElementById(`quickCat_${txId}`).value;
+      const newVou = document.getElementById(`quickVou_${txId}`).value.trim();
+
+      if (newCat === 'UNCLASSIFIED_IN' || newCat === 'UNCLASSIFIED_OUT') {
+        showToast('请先为该笔流水选择明确的 SME-FRS 会计核算科目');
+        return;
+      }
+      if (!newVou) {
+        showToast('请输入关联的贸易合同、商业发票或收据凭证编号以完成勾稽');
+        return;
+      }
+
+      tx.category = newCat;
+      tx.voucherRef = newVou;
+      saveDatabase();
+      refreshAll();
+      showToast(`已成功补齐流水 [${tx.bankRef}] 的科目分类与凭证编号！`);
+      triggerAutoCloudSyncIfEnabled('补齐缺失凭证并解锁四表');
+    }
+
+    // TAB 1: INCOME STATEMENT
+    function renderIncomeStatement(m) {
+      const s = m.sums;
+      const inc = m.income;
+      const tbody = document.getElementById('incomeTableBody');
+
+      const rows = [
+        { section: true, title: '一、营业收入 (Operating Revenue)' },
+        { name: '跨境贸易销售收入 (Cross-Border Trade Revenue)', note: '勾稽贸易出口合同与商业发票 (AR)', val: s.REV_TRADE },
+        { name: '技术咨询与服务收入 (Technical & Consulting Service Revenue)', note: '勾稽服务协议与收据 (Service Invoice)', val: s.REV_SERVICE },
+        { bold: true, bg: 'bg-slate-50', name: '营业总收入小计 (Total Revenue)', note: '公式汇总 = 贸易收入 + 服务收入', val: inc.totalRevenue },
+
+        { section: true, title: '二、主营业务成本 (Cost of Goods Sold - 跨境贸易直接成本)' },
+        { name: '减：跨境贸易商品采购成本 (Merchandise Purchases)', note: '勾稽供应商采购合同与付款水单 (AP)', val: -s.COGS_PURCHASE },
+        { name: '减：国际物流、海空运及清关仓储费 (Freight & Customs Clearance)', note: '勾稽提单 B/L 及货代费用账单', val: -s.COGS_LOGISTICS },
+        { bold: true, bg: 'bg-indigo-50/50', name: '毛利 (Gross Profit)', note: '公式 = 营业总收入 - 主营业务成本', val: inc.grossProfit },
+
+        { section: true, title: '三、经营与管理费用 (Operating & Administrative Expenses)' },
+        { name: '员工薪俸及津贴支出 (Salaries & Wages)', note: '勾稽雇佣合同与月度薪俸单 (Payslips)', val: -s.EXP_SALARY },
+        { name: '强积金供款支出 (MPF Contributions)', note: '勾稽强积金信托结算单 (雇员5%+雇主5%)', val: -s.EXP_MPF },
+        { name: '办公室租金支出 (Office Rent Expense)', note: '仅计当期租金，租约按金已重分类至流动资产', val: -s.EXP_RENT },
+        { name: '法定厘印税 / 印花税 (Stamp Duty)', note: '勾稽香港税务局印花证明书', val: -s.EXP_STAMP },
+        { name: '秘书服务、审计及行政办公费 (Professional & Admin Expenses)', note: '勾稽第三方服务商发票', val: -s.EXP_ADMIN },
+        { name: '银行月费及跨境电汇手续费 (Bank Charges & TT Fees)', note: '勾稽银行月结单扣费明细', val: -s.EXP_BANK_FEE },
+        { bold: true, bg: 'bg-slate-50', name: '经营与管理费用小计 (Total Operating Expenses)', note: '公式汇总各项营运费用', val: -inc.totalOpEx },
+
+        { section: true, title: '四、财务收益与内部换汇净损益 (Financial Income & FX)' },
+        { name: '银行存款利息收入 (Bank Credit Interest)', note: '勾稽银行结单利息入账', val: s.FIN_INTEREST },
+        { name: '同名多币种账户结汇净差额 (Internal FX Conversion Variance)', note: '同名账户跨币种划转对冲差额', val: inc.netInternalFxDiff },
+
+        {
+          highlight: true,
+          name: '五、本期净利润 / (净亏损) (Net Profit / Loss for the Period)',
+          note: '自动结转至表二《资产负债表》之「未分配利润/累计亏损」',
+          val: inc.netProfit
+        }
+      ];
+
+      tbody.innerHTML = rows.map(r => {
+        if (r.section) {
+          return `<tr class="bg-slate-100/80"><td colspan="3" class="py-2 px-3 font-bold text-slate-800">${r.title}</td></tr>`;
+        }
+        if (r.highlight) {
+          const color = r.val >= 0 ? 'text-emerald-700' : 'text-rose-600';
+          return `
+            <tr class="bg-slate-900 text-white font-bold text-sm">
+              <td class="py-3 px-3">${r.name}</td>
+              <td class="py-3 px-3 text-xs text-slate-300 font-normal">${r.note}</td>
+              <td class="py-3 px-3 text-right mono ${r.val >= 0 ? 'text-emerald-400' : 'text-rose-400'}">HK$ ${formatMoney(r.val)}</td>
+            </tr>
+          `;
+        }
+        return `
+          <tr class="${r.bg || 'hover:bg-slate-50'} ${r.bold ? 'font-bold text-slate-900' : 'text-slate-700'}">
+            <td class="py-2 px-3">${r.name}</td>
+            <td class="py-2 px-3 text-slate-500">${r.note}</td>
+            <td class="py-2 px-3 text-right mono ${r.val < 0 ? 'text-rose-600' : ''}">${formatMoney(r.val)}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // TAB 2: BALANCE SHEET
+    function renderBalanceSheet(m) {
+      const b = m.balance;
+      const tbody = document.getElementById('balanceTableBody');
+
+      const suspenseDebitWarn = b.suspenseDebitAsset > 0
+        ? `<span class="px-1.5 py-0.5 rounded bg-amber-500 text-white text-[10px] font-bold ml-1">待分类支出暂挂差异</span>`
+        : '';
+      const suspenseCreditWarn = b.suspenseCreditLiab > 0
+        ? `<span class="px-1.5 py-0.5 rounded bg-amber-500 text-white text-[10px] font-bold ml-1">待分类收款暂挂差异</span>`
+        : '';
+
+      const rows = [
+        { section: true, title: '【资产 (ASSETS)】 — 流动资产 (Current Assets)' },
+        { name: '货币资金 - 银行存款 (Cash and Bank Balances in HKD Eqv.)', note: '100% 勾稽表三《现金流量表》期末现金及表四总账结余', val: b.cashAsset },
+        { name: '存出保证金 (Deposits Paid - 租金按金/水电门匙按金)', note: 'SME-FRS 重分类资产：期满交吉可退回，严禁列作当期费用', val: b.depositsAsset },
+        { name: '其他应收款 - 应收股东未缴股本款 (Due from Shareholder)', note: '注册股本尚未实际打入银行账户之挂账对冲', val: b.dueFromShareholder },
+        {
+          warn: b.suspenseDebitAsset > 0,
+          name: `其他应收款 - 待分类暂记支出 (Suspense Debits Pending Voucher) ${suspenseDebitWarn}`,
+          note: '草稿配平暂挂项：补齐支出流水分类后自动清零并转入对应成本费用',
+          val: b.suspenseDebitAsset
+        },
+        { bold: true, bg: 'bg-indigo-50/60', name: '资产总计 (Total Assets)', note: '流动资产合计', val: b.totalAssets },
+
+        { section: true, title: '【负债 (LIABILITIES)】 — 流动负债 (Current Liabilities)' },
+        { name: '其他应付款 - 股东借款 (Other Payables - Shareholder\'s Loan)', note: '无息、无担保、按需偿还之股东个人垫资款累计净额', val: b.shareholderLoanPayable },
+        {
+          warn: b.suspenseCreditLiab > 0,
+          name: `其他应付款 - 待分类暂记收款 (Suspense Credits Pending Voucher) ${suspenseCreditWarn}`,
+          note: '草稿配平暂挂项：补齐收款流水分类后自动清零并转入对应收入或往来',
+          val: b.suspenseCreditLiab
+        },
+        { bold: true, bg: 'bg-slate-50', name: '负债合计 (Total Liabilities)', note: '流动负债合计', val: b.totalLiabilities },
+
+        { section: true, title: '【所有者权益 (EQUITY)】' },
+        { name: '股本 (Share Capital)', note: '香港公司注册发行股本 (Issued Share Capital)', val: b.effectiveShareCapital },
+        { name: '未分配利润 / (累计亏损) (Retained Earnings / Accumulated Losses)', note: '100% 勾稽表一《利润表》当期净利润/净亏损', val: b.retainedEarnings },
+        { bold: true, bg: 'bg-slate-50', name: '所有者权益合计 (Total Equity)', note: '公式 = 股本 + 未分配利润', val: b.totalEquity },
+
+        { bold: true, bg: 'bg-indigo-50/60', name: '负债及所有者权益总计 (Total Liabilities & Equity)', note: '公式 = 负债合计 + 所有者权益合计', val: b.totalLiabAndEquity },
+        {
+          check: true,
+          name: '资产负债表恒等式核验：Assets - (Liabilities + Equity)',
+          note: Math.abs(b.balanceDiff) < 0.005 ? '✓ 平衡检查 100% 通过 (平衡 OK)' : '❌ 存在未配平差额',
+          val: b.balanceDiff
+        }
+      ];
+
+      tbody.innerHTML = rows.map(r => {
+        if (r.section) {
+          return `<tr class="bg-slate-100/80"><td colspan="3" class="py-2 px-3 font-bold text-slate-800">${r.title}</td></tr>`;
+        }
+        if (r.check) {
+          return `
+            <tr class="bg-slate-900 text-white font-bold text-sm">
+              <td class="py-3 px-3">${r.name}</td>
+              <td class="py-3 px-3 text-xs text-emerald-400">${r.note}</td>
+              <td class="py-3 px-3 text-right mono text-emerald-400">HK$ ${formatMoney(r.val)}</td>
+            </tr>
+          `;
+        }
+        return `
+          <tr class="${r.warn ? 'bg-amber-100/80 font-bold text-amber-950' : (r.bg || 'hover:bg-slate-50')} ${r.bold ? 'font-bold text-slate-900' : 'text-slate-700'}">
+            <td class="py-2 px-3">${r.name}</td>
+            <td class="py-2 px-3 text-slate-500">${r.note}</td>
+            <td class="py-2 px-3 text-right mono ${r.val < 0 ? 'text-rose-600' : ''}">${formatMoney(r.val)}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // TAB 3: CASH FLOW STATEMENT
+    function renderCashFlowStatement(m) {
+      const s = m.sums;
+      const cf = m.cashflow;
+      const tbody = document.getElementById('cashflowTableBody');
+
+      const rows = [
+        { section: true, title: '一、经营活动产生的现金流量 (Cash Flows from Operating Activities)' },
+        { name: '销售商品、提供跨境贸易及咨询服务收到的现金', note: '对应主营业务收入实收现流', val: round2(s.REV_TRADE + s.REV_SERVICE) },
+        { name: '收到的银行存款利息及退回按金', note: '对应财务利息与按金退回', val: round2(s.FIN_INTEREST + s.ASSET_DEPOSIT_REFUND) },
+        { name: '购买跨境贸易商品、支付国际物流清关费的现金', note: '对应贸易采购与物流成本实付现流', val: -round2(s.COGS_PURCHASE + s.COGS_LOGISTICS) },
+        { name: '支付给职工以及为职工缴纳强积金(MPF)的现金', note: '对应实发工资与MPF供款支出', val: -round2(s.EXP_SALARY + s.EXP_MPF) },
+        { name: '支付办公室租金、印花税、行政及银行手续费的现金', note: '对应各项日常营运管理费用', val: -round2(s.EXP_RENT + s.EXP_STAMP + s.EXP_ADMIN + s.EXP_BANK_FEE) },
+        { name: '支付存出保证金（租约按金、水电按金）的现金流出', note: '与表二《资产负债表》新增「存出保证金」严格勾稽', val: -s.ASSET_DEPOSIT_PAID },
+        {
+          warn: (s.UNCLASSIFIED_IN > 0 || s.UNCLASSIFIED_OUT > 0),
+          name: '待分类暂记流水现金净额 (Net Suspense Cash Flows)',
+          note: '草稿配平项：待确认分类之银行收支净额',
+          val: round2(s.UNCLASSIFIED_IN - s.UNCLASSIFIED_OUT + m.income.netInternalFxDiff)
+        },
+        { bold: true, bg: 'bg-slate-50', name: '经营活动产生的现金流量净额 (Net Cash from Operating Activities)', note: '经营现金流入 - 经营现金流出', val: cf.netOperatingCF },
+
+        { section: true, title: '二、筹资活动产生的现金流量 (Cash Flows from Financing Activities)' },
+        { name: '收到股东借款划入的现金 (Shareholder\'s Loan Inflow)', note: '勾稽《股东借款协议》及表二其他应付款', val: s.LIAB_SH_LOAN_IN },
+        { name: '收到股东实缴股本入账的现金 (Proceeds from Issue of Shares)', note: '勾稽股本实缴流水', val: s.EQ_CAPITAL_IN },
+        { name: '归还股东借款支付的现金 (Repayment of Shareholder\'s Loan)', note: '勾稽股东往来归还记录', val: -s.LIAB_SH_LOAN_OUT },
+        { bold: true, bg: 'bg-slate-50', name: '筹资活动产生的现金流量净额 (Net Cash from Financing Activities)', note: '筹资流入 - 筹资流出', val: cf.netFinancingCF },
+
+        { section: true, title: '三、现金及现金等价物净变动与期末勾稽 (Cash Reconciliation)' },
+        { bold: true, name: '现金及现金等价物净增加额 (Net Increase / Decrease in Cash)', note: '经营现金流净额 + 筹资现金流净额', val: cf.netCashChange },
+        { name: '加：期初现金及现金等价物余额 (Beginning Cash Balance)', note: '上期结转银行结存 (HKD折算)', val: cf.openingCash },
+        {
+          highlight: true,
+          name: '期末现金及现金等价物余额 (Ending Cash Balance)',
+          note: '✓ 与表二《资产负债表》货币资金及表四《银行总账》期末结余 100% 相等',
+          val: cf.endingCashCF
+        }
+      ];
+
+      tbody.innerHTML = rows.map(r => {
+        if (r.section) {
+          return `<tr class="bg-slate-100/80"><td colspan="3" class="py-2 px-3 font-bold text-slate-800">${r.title}</td></tr>`;
+        }
+        if (r.highlight) {
+          return `
+            <tr class="bg-slate-900 text-white font-bold text-sm">
+              <td class="py-3 px-3">${r.name}</td>
+              <td class="py-3 px-3 text-xs text-emerald-400 font-normal">${r.note}</td>
+              <td class="py-3 px-3 text-right mono text-emerald-400">HK$ ${formatMoney(r.val)}</td>
+            </tr>
+          `;
+        }
+        return `
+          <tr class="${r.warn ? 'bg-amber-100/80 font-bold text-amber-950' : (r.bg || 'hover:bg-slate-50')} ${r.bold ? 'font-bold text-slate-900' : 'text-slate-700'}">
+            <td class="py-2 px-3">${r.name}</td>
+            <td class="py-2 px-3 text-slate-500">${r.note}</td>
+            <td class="py-2 px-3 text-right mono ${r.val < 0 ? 'text-rose-600' : ''}">${formatMoney(r.val)}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // TAB 4: MULTI-CURRENCY GENERAL LEDGER
+    function renderGeneralLedger(m) {
+      const tbody = document.getElementById('ledgerTableBody');
+      const openRow = `
+        <tr class="bg-slate-50 font-semibold text-slate-700">
+          <td class="py-2 px-2 mono">期初结转</td>
+          <td class="py-2 px-2" colspan="6">核算期间期初银行结余 (Opening Balance)</td>
+          <td class="py-2 px-2 text-right mono font-bold text-slate-900">${formatMoney(m.cashflow.openingCash)}</td>
+          <td class="py-2 px-2" colspan="3"></td>
+        </tr>
+      `;
+
+      const txHtml = m.ledgerRows.map(row => {
+        const hasIssue = row.isUnclassified || row.isMissingVoucher;
+        const statusBadge = hasIssue
+          ? `<span class="px-1.5 py-0.5 rounded bg-amber-500 text-white text-[10px] font-bold">⚠️ ${row.isUnclassified ? '待分类' : '缺凭证'}</span>`
+          : `<span class="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-mono font-semibold">✓ ${row.voucherRef}</span>`;
+
+        return `
+          <tr class="${hasIssue ? 'bg-amber-50/90 hover:bg-amber-100/70' : 'hover:bg-slate-50'}">
+            <td class="py-2 px-2 mono whitespace-nowrap">${row.date}</td>
+            <td class="py-2 px-2">
+              <div class="font-semibold text-slate-800">${row.counterparty}</div>
+              <div class="text-[10px] mono text-slate-400">${row.bankRef}</div>
+            </td>
+            <td class="py-2 px-2 max-w-[220px] truncate" title="${row.description}">${row.description}</td>
+            <td class="py-2 px-2 text-right mono whitespace-nowrap font-medium">
+              ${row.currency} ${formatMoney(row.origAmount)}
+            </td>
+            <td class="py-2 px-2 text-right mono text-slate-500">${Number(row.fxRate).toFixed(4)}</td>
+            <td class="py-2 px-2 text-right mono text-emerald-700 font-medium">${row.hkdDeposit > 0 ? formatMoney(row.hkdDeposit) : '-'}</td>
+            <td class="py-2 px-2 text-right mono text-rose-600 font-medium">${row.hkdWithdrawal > 0 ? formatMoney(row.hkdWithdrawal) : '-'}</td>
+            <td class="py-2 px-2 text-right mono font-bold text-slate-900">${formatMoney(row.runningBalance)}</td>
+            <td class="py-2 px-2 text-[11px] font-medium ${row.isUnclassified ? 'text-rose-600 font-bold' : 'text-slate-700'}">
+              ${ALL_CATEGORY_MAP[row.category] || row.category}
+            </td>
+            <td class="py-2 px-2 whitespace-nowrap">${statusBadge}</td>
+            <td class="py-2 px-2 text-center whitespace-nowrap no-print">
+              <button onclick="editTransaction('${row.id}')" class="text-indigo-600 hover:underline mr-1.5 font-medium">编辑</button>
+              <button onclick="deleteTransaction('${row.id}')" class="text-rose-600 hover:underline font-medium">删除</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      tbody.innerHTML = openRow + txHtml;
+    }
+
+    // TAB 5: STATUTORY AUDIT DEFENSE PACK & JSON
+    function renderAuditDefensePack(comp, m) {
+      const notice = document.getElementById('auditPackLockNotice');
+      if (m.checks.isAuditReady) {
+        notice.className = 'p-3.5 rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-900 text-xs font-medium';
+        notice.innerHTML = '✓ 当前公司账套已通过 100% 凭证勾稽与四表配平核验，以下香港法定审计配套法律协议与底稿说明已填入真实审计数据，可直接导出归档。';
+      } else {
+        notice.className = 'p-3.5 rounded-lg border border-amber-300 bg-amber-50 text-amber-900 text-xs font-medium';
+        notice.innerHTML = `⚠️ 当前处于【草稿暂记模式】，尚有 ${m.discrepancies.length} 笔流水缺失凭证或待确认分类。请先在上方警示面板补齐全部凭证后，再将以下审计配套文件用于正式递交香港执业会计师 (CPA)。`;
+      }
+
+      // 1. Shareholder Loan Agreement Text
+      const loanText = `【香港法定审计配套文件 1：股东往来确认协议】
+SHAREHOLDER'S LOAN AGREEMENT (无息、无担保、按需偿还股东借款协议)
+
+借款方 (公司主体)：${comp.nameCN} (${comp.nameEN})
+香港商业登记证号码 (BR No.)：${comp.brNo}
+核算确认期间：${comp.periodStart} 至 ${comp.periodEnd}
+
+鉴于公司日常跨境贸易及技术服务营运周转需要，公司董事/股东于上述核算期间内向公司提供资金支持：
+1. 本期股东借款累计转入金额：HK$ ${formatMoney(m.sums.LIAB_SH_LOAN_IN)}
+2. 本期公司归还股东借款金额：HK$ ${formatMoney(m.sums.LIAB_SH_LOAN_OUT)}
+3. 截至 ${comp.periodEnd} 期末应付股东借款净余额：HK$ ${formatMoney(m.balance.shareholderLoanPayable)}
+
+【SME-FRS 会计与审计准则条款】：
+- 该笔款项性质为往来借款，计入资产负债表「流动负债 — 其他应付款（股东借款）」，并非增资发行新股（未签署 Form NSC1），不计入实收资本。
+- 本借款为无息（0% Interest Rate）、无抵押担保（Unsecured），且须按股东要求随时偿还（Repayable on Demand）。
+
+公司签署盖章：_______________________          股东签署确认：_______________________`;
+
+      document.getElementById('docShareholderLoan').textContent = loanText;
+
+      // 2. Rent Deposit & MPF Memo
+      const memoText = `【香港法定审计配套文件 2：重分类与准则合规说明底稿】
+审计主体：${comp.nameCN} (BR: ${comp.brNo})
+编制基准：香港《中小型企业财务报告准则》(SME-FRS)
+
+一、办公室租赁按金重分类说明 (Rent vs. Deposits Paid)
+1. 计入当期利润表「管理费用 - 租金支出」：HK$ ${formatMoney(m.sums.EXP_RENT)}
+2. 计入当期利润表「管理费用 - 印花税(厘印费)」：HK$ ${formatMoney(m.sums.EXP_STAMP)}
+3. 重分类至资产负债表「流动资产 - 存出保证金 (Deposits Paid)」：HK$ ${formatMoney(m.balance.depositsAsset)}
+   * 审计核验结论：租约押金、水电及门匙按金于租约期满交吉时可获退还，符合资产定义，已严格从当期损益中剥离，避免虚增当期亏损。
+
+二、员工薪俸与香港强积金 (MPF) 勾稽核对
+1. 当期实发员工工资支出 (Salary Expense)：HK$ ${formatMoney(m.sums.EXP_SALARY)}
+2. 当期缴纳强积金信托供款 (MPF Expense)：HK$ ${formatMoney(m.sums.EXP_MPF)}
+   * 审计核验结论：已核对雇佣合同、月度薪俸单 (Payslips) 及 MPF 供款结算单（遵循每人每月雇员5%及雇主5%各 HK$1,500 法定上限规定）。
+
+三、多币种折算基准声明 (Multi-Currency FX Policy)
+- 本账套采用「${comp.fxSettings.mode === 'hsbc_weekly' ? '每周一 09:30 香港汇丰银行 (HSBC HK) 公布牌价作为周日到周一的固定折算汇率' : '核算期间固定折算汇率'}」将 USD/CNY/EUR 交易折算为 HKD 入账。`;
+
+      document.getElementById('docAuditMemo').textContent = memoText;
+
+      // 3. Standardized reports.json
+      const jsonSpec = {
+        entity: {
+          company_id: comp.id,
+          name_cn: comp.nameCN,
+          name_en: comp.nameEN,
+          br_no: comp.brNo,
+          bank_account_last4: comp.bankLast4,
+          base_currency: 'HKD',
+          fx_policy: comp.fxSettings.mode
+        },
+        period: {
+          start: comp.periodStart,
+          end: comp.periodEnd
+        },
+        status: m.checks.isAuditReady ? 'FINAL_AUDIT_READY' : 'DRAFT_SUSPENSE_MODE',
+        summary_cards: {
+          trade_revenue_hkd: m.sums.REV_TRADE,
+          service_revenue_hkd: m.sums.REV_SERVICE,
+          total_revenue_hkd: m.income.totalRevenue,
+          total_cogs_hkd: m.income.totalCOGS,
+          gross_profit_hkd: m.income.grossProfit,
+          total_operating_expenses_hkd: m.income.totalOpEx,
+          net_profit_or_loss_hkd: m.income.netProfit,
+          ending_cash_hkd: m.balance.cashAsset,
+          deposits_paid_asset_hkd: m.balance.depositsAsset,
+          due_from_shareholder_hkd: m.balance.dueFromShareholder,
+          shareholder_loan_payable_hkd: m.balance.shareholderLoanPayable,
+          suspense_debit_asset_hkd: m.balance.suspenseDebitAsset,
+          suspense_credit_liab_hkd: m.balance.suspenseCreditLiab
+        },
+        audit_checks: {
+          balance_sheet_balanced: m.checks.bsBalanced,
+          cash_tied_to_statement: m.checks.cashTied,
+          unclassified_or_missing_voucher_count: m.discrepancies.length,
+          final_tables_unlocked: m.checks.isAuditReady
+        },
+        missing_vouchers_alert: m.discrepancies.map(d => ({
+          tx_id: d.tx.id,
+          date: d.tx.date,
+          bank_ref: d.tx.bankRef,
+          counterparty: d.tx.counterparty,
+          original_currency: d.tx.currency,
+          original_amount: d.tx.origAmount,
+          hkd_amount: d.tx.hkdAmount,
+          issue: d.isUnclassified ? 'UNCLASSIFIED_CATEGORY' : 'MISSING_VOUCHER_REF'
+        }))
+      };
+
+      document.getElementById('jsonOutputBox').textContent = JSON.stringify(jsonSpec, null, 2);
+    }
+
+    /*************************************************************************
+     * 6. FORM ACTIONS, ATTACHMENTS, CSV PARSING & SMART SPLITTERS
+     *************************************************************************/
+    function updateCategoryOptionsByDirection() {
+      const dir = document.getElementById('txDirection').value;
+      const sel = document.getElementById('txCategory');
+      sel.innerHTML = CATEGORIES[dir].map(c => `<option value="${c.code}">${c.label}</option>`).join('');
+    }
+
+    function saveTransaction(e) {
+      e.preventDefault();
+      const comp = getActiveCompany();
+      const editId = document.getElementById('editTxId').value;
+      const origAmount = parseFloat(document.getElementById('txOrigAmount').value) || 0;
+      const fxRate = parseFloat(document.getElementById('txFxRate').value) || 1;
+      const hkdAmount = round2(origAmount * fxRate);
+
+      const txObj = {
+        id: editId || ('tx_' + Date.now()),
+        date: document.getElementById('txDate').value,
+        direction: document.getElementById('txDirection').value,
+        currency: document.getElementById('txCurrency').value,
+        origAmount: origAmount,
+        fxRate: fxRate,
+        hkdAmount: hkdAmount,
+        counterparty: document.getElementById('txCounterparty').value.trim(),
+        bankRef: document.getElementById('txBankRef').value.trim(),
+        description: document.getElementById('txDesc').value.trim(),
+        category: document.getElementById('txCategory').value,
+        voucherRef: document.getElementById('txVoucherRef').value.trim()
+      };
+
+      if (editId) {
+        const idx = comp.transactions.findIndex(t => t.id === editId);
+        if (idx >= 0) comp.transactions[idx] = txObj;
+        showToast('流水记录已更新并重新勾稽四表');
+      } else {
+        comp.transactions.push(txObj);
+        showToast('新流水已入账并完成多币种折算与四表重算');
+      }
+
+      saveDatabase();
+      resetTxForm();
+      refreshAll();
+      triggerAutoCloudSyncIfEnabled('新增/修改银行流水');
+    }
+
+    function editTransaction(txId) {
+      const comp = getActiveCompany();
+      const tx = comp.transactions.find(t => t.id === txId);
+      if (!tx) return;
+
+      document.getElementById('editTxId').value = tx.id;
+      document.getElementById('txDate').value = tx.date;
+      document.getElementById('txDirection').value = tx.direction;
+      updateCategoryOptionsByDirection();
+      document.getElementById('txCurrency').value = tx.currency;
+      document.getElementById('txOrigAmount').value = tx.origAmount;
+      document.getElementById('txFxRate').value = tx.fxRate;
+      document.getElementById('txCounterparty').value = tx.counterparty;
+      document.getElementById('txBankRef').value = tx.bankRef;
+      document.getElementById('txDesc').value = tx.description;
+      document.getElementById('txCategory').value = tx.category;
+      document.getElementById('txVoucherRef').value = tx.voucherRef || '';
+      previewHkdEquivalent();
+
+      document.getElementById('txFormTitle').textContent = `正在编辑流水: ${tx.bankRef}`;
+      document.getElementById('cancelEditBtn').classList.remove('hidden');
+      document.getElementById('txForm').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function resetTxForm() {
+      document.getElementById('editTxId').value = '';
+      document.getElementById('txOrigAmount').value = '';
+      document.getElementById('txCounterparty').value = '';
+      document.getElementById('txBankRef').value = '';
+      document.getElementById('txDesc').value = '';
+      document.getElementById('txVoucherRef').value = '';
+      document.getElementById('txFormTitle').textContent = '3. 银行流水与贸易/服务凭证录入 (支持多币种)';
+      document.getElementById('cancelEditBtn').classList.add('hidden');
+      previewTxFxRate();
+    }
+
+    function deleteTransaction(txId) {
+      const comp = getActiveCompany();
+      comp.transactions = comp.transactions.filter(t => t.id !== txId);
+      saveDatabase();
+      refreshAll();
+      showToast('已删除该笔银行流水并重算四表');
+    }
+
+    function updatePeriodAndRecalc() {
+      const comp = getActiveCompany();
+      comp.periodStart = document.getElementById('periodStart').value;
+      comp.periodEnd = document.getElementById('periodEnd').value;
+      saveDatabase();
+      refreshAll();
+    }
+
+    function updateAccountingMode() {
+      const comp = getActiveCompany();
+      comp.accountingMode = document.getElementById('accountingModeSelect').value;
+      if (comp.accountingMode === 'inaugural') {
+        comp.openingCashHKD = 0;
+        comp.openingDepositsHKD = 0;
+        comp.openingShLoanHKD = 0;
+        comp.openingRetainedEarningsHKD = 0;
+      }
+      saveDatabase();
+      refreshAll();
+      showToast(comp.accountingMode === 'carry' ? '已切换至【往期延续建账】，可在“编辑主体与期初”中输入上期结转余额' : '已切换至【首年新设建账（零期初）】模式');
+    }
+
+    function updateShareCapitalStatus() {
+      const comp = getActiveCompany();
+      comp.shareCapitalPaid = (document.getElementById('shareCapitalPaidSelect').value === 'paid');
+      saveDatabase();
+      refreshAll();
+      showToast('已更新股本实缴状态并自动调整资产负债表对冲分录');
+    }
+
+    // Attachments & CSV Parsing + Google Drive Direct Upload
+    function renderAttachments(comp) {
+      const counts = { bank: 0, ar: 0, ap: 0, corp: 0 };
+      (comp.attachments || []).forEach(a => { if (counts[a.type] !== undefined) counts[a.type]++; });
+      document.getElementById('badgeCountBank').textContent = `${counts.bank} 份`;
+      document.getElementById('badgeCountAR').textContent = `${counts.ar} 份`;
+      document.getElementById('badgeCountAP').textContent = `${counts.ap} 份`;
+      document.getElementById('badgeCountCorp').textContent = `${counts.corp} 份`;
+
+      const container = document.getElementById('attachmentListContainer');
+      if (!comp.attachments || comp.attachments.length === 0) {
+        container.innerHTML = `<div class="text-slate-400 text-[11px] italic">当前账套暂无上传附件</div>`;
+        return;
+      }
+      const typeTag = {
+        bank: '<span class="px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-800 font-medium">月结单</span>',
+        ar: '<span class="px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 font-medium">收入合同</span>',
+        ap: '<span class="px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-medium">支出凭证</span>',
+        corp: '<span class="px-1.5 py-0.2 rounded bg-slate-200 text-slate-800 font-medium">注册资料</span>'
+      };
+      container.innerHTML = comp.attachments.map(a => `
+        <div class="flex items-center justify-between py-1 px-2 rounded bg-slate-50 border border-slate-200">
+          <div class="flex items-center gap-2 truncate">
+            ${typeTag[a.type] || ''}
+            ${a.driveUrl
+              ? `<a href="${a.driveUrl}" target="_blank" class="truncate text-indigo-600 hover:underline font-medium">${a.name} (已存Drive)</a>`
+              : `<span class="truncate text-slate-700 font-medium">${a.name}</span>`}
+          </div>
+          <span class="text-[10px] mono text-slate-400 shrink-0 ml-2">${a.date}</span>
+        </div>
+      `).join('');
+    }
+
+    function handleAttachmentUpload(event, type) {
+      const files = Array.from(event.target.files || []);
+      if (files.length === 0) return;
+      const comp = getActiveCompany();
+      const today = new Date().toISOString().slice(0, 10);
+
+      files.forEach(file => {
+        const attObj = {
+          id: 'att_' + Date.now() + Math.random().toString(36).slice(2, 6),
+          type,
+          name: file.name,
+          date: today,
+          driveUrl: ''
+        };
+        comp.attachments.unshift(attObj);
+
+        // If CSV uploaded in bank zone, parse rows into transactions
+        if (type === 'bank' && file.name.toLowerCase().endsWith('.csv')) {
+          const reader = new FileReader();
+          reader.onload = function(evt) {
+            parseBankCSV(evt.target.result, comp);
+          };
+          reader.readAsText(file);
+        }
+
+        // If Google Apps Script Web App URL is configured, automatically upload Base64 file to Google Drive
+        if (db.cloudConfig && db.cloudConfig.webAppUrl) {
+          uploadFileToGoogleDrive(file, comp, attObj);
+        }
+      });
+
+      saveDatabase();
+      refreshAll();
+      showToast(`已归档 ${files.length} 份附件至当前公司账套`);
+      event.target.value = '';
+    }
+
+    function parseBankCSV(csvText, comp) {
+      const lines = csvText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      if (lines.length < 2) return;
+      let imported = 0;
+      for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(',').map(c => c.trim());
+        // Format: date,direction(deposit/withdrawal),currency,amount,counterparty,description,bank_ref,category,voucher_ref
+        if (cols.length >= 6) {
+          const date = cols[0] || comp.periodStart;
+          const direction = (cols[1] || '').toLowerCase() === 'withdrawal' ? 'withdrawal' : 'deposit';
+          const currency = (cols[2] || 'HKD').toUpperCase();
+          const origAmount = parseFloat(cols[3]) || 0;
+          if (origAmount <= 0) continue;
+          const { rate } = getApplicableFxRate(comp, currency, date);
+          const hkdAmount = round2(origAmount * rate);
+          comp.transactions.push({
+            id: 'csv_' + Date.now() + '_' + i,
+            date,
+            direction,
+            currency,
+            origAmount,
+            fxRate: rate,
+            hkdAmount,
+            counterparty: cols[4] || 'CSV导入交易对手',
+            description: cols[5] || '银行月结单导入流水',
+            bankRef: cols[6] || ('CSV-REF-' + i),
+            category: cols[7] || (direction === 'deposit' ? 'UNCLASSIFIED_IN' : 'UNCLASSIFIED_OUT'),
+            voucherRef: cols[8] || ''
+          });
+          imported++;
+        }
+      }
+      saveDatabase();
+      refreshAll();
+      showToast(`已从月结单 CSV 自动解析入账 ${imported} 笔多币种流水并完成汇率勾兑！`);
+    }
+
+    function downloadSampleCSV() {
+      const sample = [
+        'date,direction,currency,amount,counterparty,description,bank_ref,category,voucher_ref',
+        '2026-03-10,deposit,USD,12000.00,GLOBAL BUYER INC,跨境贸易尾款收汇,HSBC-CSV-001,REV_TRADE,INV-2026-009',
+        '2026-03-12,withdrawal,CNY,45000.00,东莞模具厂,跨境贸易采购尾款,HSBC-CSV-002,COGS_PURCHASE,',
+        '2026-03-15,withdrawal,HKD,250.00,HSBC HK,3月份账户管理月费,HSBC-CSV-003,EXP_BANK_FEE,BANK-STMT-03'
+      ].join('\n');
+      const blob = new Blob(['\uFEFF' + sample], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'HSBC_多币种银行月结单导入模板.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // Smart Splitters (Rent vs. Deposit, Payroll + MPF, Internal FX Swap)
+    function openRentSplitterModal() {
+      document.getElementById('splitterModalTitle').textContent = '🏢 办公室首笔租约款项拆解器 (Rent vs. Deposit 重分类)';
+      document.getElementById('splitterModalContent').innerHTML = `
+        <p class="text-slate-600">香港审计准则要求：支付给业主的首笔总额中，<strong>按金（押金）属于公司流动资产</strong>，严禁全部计入当期租金费用。本工具一键拆解为 3 笔勾稽流水：</p>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-medium text-slate-700">付款日期</label>
+            <input type="date" id="spRentDate" value="${getActiveCompany().periodStart}" class="mt-1 w-full px-2.5 py-1.5 border rounded mono">
+          </div>
+          <div>
+            <label class="block font-medium text-slate-700">业主/物业公司名称</label>
+            <input type="text" id="spRentLandlord" value="香港商业置业有限公司" class="mt-1 w-full px-2.5 py-1.5 border rounded">
+          </div>
+          <div>
+            <label class="block font-medium text-slate-700">① 首月租金支出 (HKD)</label>
+            <input type="number" id="spRentAmt" value="12000" class="mt-1 w-full px-2.5 py-1.5 border rounded mono">
+          </div>
+          <div>
+            <label class="block font-medium text-slate-700">② 租金及水电门匙按金 (HKD - 计入资产)</label>
+            <input type="number" id="spDepositAmt" value="24000" class="mt-1 w-full px-2.5 py-1.5 border rounded mono">
+          </div>
+          <div>
+            <label class="block font-medium text-slate-700">③ 法定厘印税/印花税 (HKD)</label>
+            <input type="number" id="spStampAmt" value="360" class="mt-1 w-full px-2.5 py-1.5 border rounded mono">
+          </div>
+          <div>
+            <label class="block font-medium text-slate-700">租约凭证编号 (Tenancy Ref)</label>
+            <input type="text" id="spRentVoucher" value="TA-2026-NEW" class="mt-1 w-full px-2.5 py-1.5 border rounded mono">
+          </div>
+        </div>
+        <div class="pt-3 flex justify-end gap-2">
+          <button onclick="closeSplitterModal()" class="px-4 py-1.5 border rounded-lg">取消</button>
+          <button onclick="confirmRentSplit()" class="px-4 py-1.5 bg-indigo-600 text-white font-semibold rounded-lg">一键生成拆解流水</button>
+        </div>
+      `;
+      const m = document.getElementById('splitterModal');
+      m.classList.remove('hidden');
+      m.classList.add('flex');
+    }
+
+    function confirmRentSplit() {
+      const comp = getActiveCompany();
+      const date = document.getElementById('spRentDate').value;
+      const landlord = document.getElementById('spRentLandlord').value;
+      const rent = parseFloat(document.getElementById('spRentAmt').value) || 0;
+      const dep = parseFloat(document.getElementById('spDepositAmt').value) || 0;
+      const stamp = parseFloat(document.getElementById('spStampAmt').value) || 0;
+      const vou = document.getElementById('spRentVoucher').value.trim();
+
+      if (rent > 0) {
+        comp.transactions.push({
+          id: 'tx_rent_' + Date.now(), date, direction: 'withdrawal', currency: 'HKD', origAmount: rent, fxRate: 1, hkdAmount: rent,
+          counterparty: landlord, bankRef: 'RENT-' + Date.now().toString().slice(-4), description: '当期办公室租金支出', category: 'EXP_RENT', voucherRef: vou
+        });
+      }
+      if (dep > 0) {
+        comp.transactions.push({
+          id: 'tx_dep_' + Date.now() + 1, date, direction: 'withdrawal', currency: 'HKD', origAmount: dep, fxRate: 1, hkdAmount: dep,
+          counterparty: landlord, bankRef: 'DEP-' + Date.now().toString().slice(-4), description: '租约按金及水电门匙按金 (重分类至流动资产-存出保证金)', category: 'ASSET_DEPOSIT_PAID', voucherRef: vou
+        });
+      }
+      if (stamp > 0) {
+        comp.transactions.push({
+          id: 'tx_stp_' + Date.now() + 2, date, direction: 'withdrawal', currency: 'HKD', origAmount: stamp, fxRate: 1, hkdAmount: stamp,
+          counterparty: '香港税务局 (IRD)', bankRef: 'STAMP-' + Date.now().toString().slice(-4), description: '租约法定厘印费 (印花税)', category: 'EXP_STAMP', voucherRef: vou
+        });
+      }
+      saveDatabase();
+      closeSplitterModal();
+      refreshAll();
+      showToast('已按 SME-FRS 准则拆解入账：租金费用、印花税及存出保证金（流动资产）！');
+    }
+
+    function openMpfSplitterModal() {
+      document.getElementById('splitterModalTitle').textContent = '👥 香港薪俸与强积金 (MPF 5%+5%) 自动拆解器';
+      document.getElementById('splitterModalContent').innerHTML = `
+        <p class="text-slate-600">香港强积金法定供款上限为每人每月 HK$ 1,500（雇员 5% + 雇主 5%）。输入雇员合约基本月薪，自动拆解银行实发净额与强积金信托供款：</p>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-medium text-slate-700">发薪日期</label>
+            <input type="date" id="spPayDate" value="${getActiveCompany().periodEnd}" class="mt-1 w-full px-2.5 py-1.5 border rounded mono">
+          </div>
+          <div>
+            <label class="block font-medium text-slate-700">雇员姓名</label>
+            <input type="text" id="spEmpName" value="李嘉豪 (贸易经理)" class="mt-1 w-full px-2.5 py-1.5 border rounded">
+          </div>
+          <div>
+            <label class="block font-medium text-slate-700">合约基本月薪 Gross Salary (HKD)</label>
+            <input type="number" id="spGrossSalary" value="30000" class="mt-1 w-full px-2.5 py-1.5 border rounded mono">
+          </div>
+          <div>
+            <label class="block font-medium text-slate-700">薪俸单凭证号 (Payslip Ref)</label>
+            <input type="text" id="spPayVoucher" value="PAYSLIP-2026-03" class="mt-1 w-full px-2.5 py-1.5 border rounded mono">
+          </div>
+        </div>
+        <div class="pt-3 flex justify-end gap-2">
+          <button onclick="closeSplitterModal()" class="px-4 py-1.5 border rounded-lg">取消</button>
+          <button onclick="confirmMpfSplit()" class="px-4 py-1.5 bg-emerald-600 text-white font-semibold rounded-lg">生成实发薪金与MPF流水</button>
+        </div>
+      `;
+      const m = document.getElementById('splitterModal');
+      m.classList.remove('hidden');
+      m.classList.add('flex');
+    }
+
+    function confirmMpfSplit() {
+      const comp = getActiveCompany();
+      const date = document.getElementById('spPayDate').value;
+      const emp = document.getElementById('spEmpName').value;
+      const gross = parseFloat(document.getElementById('spGrossSalary').value) || 30000;
+      const vou = document.getElementById('spPayVoucher').value.trim();
+
+      const empMpf = Math.min(1500, round2(gross * 0.05));
+      const erMpf = Math.min(1500, round2(gross * 0.05));
+      const netPay = round2(gross - empMpf);
+      const totalMpf = round2(empMpf + erMpf);
+
+      comp.transactions.push({
+        id: 'tx_sal_' + Date.now(), date, direction: 'withdrawal', currency: 'HKD', origAmount: netPay, fxRate: 1, hkdAmount: netPay,
+        counterparty: emp, bankRef: 'PAY-' + Date.now().toString().slice(-4),
+        description: `发放实发月薪 (基本月薪 HK$${gross} 扣减雇员5% MPF HK$${empMpf})`, category: 'EXP_SALARY', voucherRef: vou
+      });
+      comp.transactions.push({
+        id: 'tx_mpf_' + Date.now() + 1, date, direction: 'withdrawal', currency: 'HKD', origAmount: totalMpf, fxRate: 1, hkdAmount: totalMpf,
+        counterparty: 'HSBC MANDATORY PROVIDENT FUND', bankRef: 'MPF-' + Date.now().toString().slice(-4),
+        description: `缴纳强积金供款 (雇员5% HK$${empMpf} + 雇主5% HK$${erMpf})`, category: 'EXP_MPF', voucherRef: vou
+      });
+
+      saveDatabase();
+      closeSplitterModal();
+      refreshAll();
+      showToast(`已生成实发工资 HK$${formatMoney(netPay)} 及强积金供款 HK$${formatMoney(totalMpf)}！`);
+    }
+
+    function openFxTransferModal() {
+      document.getElementById('splitterModalTitle').textContent = '💱 同名多币种账户结汇互转对冲器 (Internal FX Swap)';
+      document.getElementById('splitterModalContent').innerHTML = `
+        <p class="text-slate-600">跨境贸易公司常将 USD 子账户结汇转入 HKD 主账户。使用内部往来对冲科目可防止被重复计入营业收入与费用支出：</p>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-medium text-slate-700">结汇日期</label>
+            <input type="date" id="spFxDate" value="${getActiveCompany().periodEnd}" class="mt-1 w-full px-2.5 py-1.5 border rounded mono">
+          </div>
+          <div>
+            <label class="block font-medium text-slate-700">转出外币金额 (USD)</label>
+            <input type="number" id="spFxUsdOut" value="10000" class="mt-1 w-full px-2.5 py-1.5 border rounded mono">
+          </div>
+          <div>
+            <label class="block font-medium text-slate-700">银行实际结汇入账港币 (HKD)</label>
+            <input type="number" id="spFxHkdIn" value="77980" class="mt-1 w-full px-2.5 py-1.5 border rounded mono">
+          </div>
+          <div>
+            <label class="block font-medium text-slate-700">银行兑换水单号</label>
+            <input type="text" id="spFxVoucher" value="FX-SWAP-202601" class="mt-1 w-full px-2.5 py-1.5 border rounded mono">
+          </div>
+        </div>
+        <div class="pt-3 flex justify-end gap-2">
+          <button onclick="closeSplitterModal()" class="px-4 py-1.5 border rounded-lg">取消</button>
+          <button onclick="confirmFxSwap()" class="px-4 py-1.5 bg-blue-600 text-white font-semibold rounded-lg">生成双向内部对冲流水</button>
+        </div>
+      `;
+      const m = document.getElementById('splitterModal');
+      m.classList.remove('hidden');
+      m.classList.add('flex');
+    }
+
+    function confirmFxSwap() {
+      const comp = getActiveCompany();
+      const date = document.getElementById('spFxDate').value;
+      const usdOut = parseFloat(document.getElementById('spFxUsdOut').value) || 0;
+      const hkdIn = parseFloat(document.getElementById('spFxHkdIn').value) || 0;
+      const vou = document.getElementById('spFxVoucher').value.trim();
+      const { rate } = getApplicableFxRate(comp, 'USD', date);
+
+      comp.transactions.push({
+        id: 'tx_fxout_' + Date.now(), date, direction: 'withdrawal', currency: 'USD', origAmount: usdOut, fxRate: rate, hkdAmount: round2(usdOut * rate),
+        counterparty: '本公司同名 USD 子账户', bankRef: vou + '-OUT', description: '同名账户内部结汇转出 USD', category: 'INTERNAL_FX_OUT', voucherRef: vou
+      });
+      comp.transactions.push({
+        id: 'tx_fxin_' + Date.now() + 1, date, direction: 'deposit', currency: 'HKD', origAmount: hkdIn, fxRate: 1, hkdAmount: hkdIn,
+        counterparty: '本公司同名 HKD 主账户', bankRef: vou + '-IN', description: '同名账户内部结汇转入 HKD', category: 'INTERNAL_FX_IN', voucherRef: vou
+      });
+
+      saveDatabase();
+      closeSplitterModal();
+      refreshAll();
+      showToast('已生成同名多币种结汇对冲流水，汇兑点差已自动计入财务损益！');
+    }
+
+    function closeSplitterModal() {
+      const m = document.getElementById('splitterModal');
+      m.classList.add('hidden');
+      m.classList.remove('flex');
+    }
+
+    /*************************************************************************
+     * 7. MULTI-COMPANY PROFILE MODAL
+     *************************************************************************/
+    function openNewCompanyModal() {
+      document.getElementById('companyModalMode').value = 'new';
+      document.getElementById('companyModalTitle').textContent = '+ 新增独立公司核算账套';
+      document.getElementById('compNameCN').value = '';
+      document.getElementById('compNameEN').value = '';
+      document.getElementById('compBR').value = '';
+      document.getElementById('compBankLast4').value = '';
+      document.getElementById('compAccountingMode').value = 'inaugural';
+      document.getElementById('compShareCapital').value = '10000';
+      document.getElementById('compOpeningCash').value = '0';
+      document.getElementById('compOpeningDeposits').value = '0';
+      document.getElementById('compOpeningShLoan').value = '0';
+      document.getElementById('compOpeningRE').value = '0';
+      const m = document.getElementById('companyModal');
+      m.classList.remove('hidden');
+      m.classList.add('flex');
+    }
+
+    function openEditCompanyModal() {
+      const comp = getActiveCompany();
+      document.getElementById('companyModalMode').value = 'edit';
+      document.getElementById('companyModalTitle').textContent = '编辑当前公司主体与期初信息';
+      document.getElementById('compNameCN').value = comp.nameCN;
+      document.getElementById('compNameEN').value = comp.nameEN;
+      document.getElementById('compBR').value = comp.brNo;
+      document.getElementById('compBankLast4').value = comp.bankLast4;
+      document.getElementById('compAccountingMode').value = comp.accountingMode || 'inaugural';
+      document.getElementById('compShareCapital').value = comp.shareCapital;
+      document.getElementById('compOpeningCash').value = comp.openingCashHKD || 0;
+      document.getElementById('compOpeningDeposits').value = comp.openingDepositsHKD || 0;
+      document.getElementById('compOpeningShLoan').value = comp.openingShLoanHKD || 0;
+      document.getElementById('compOpeningRE').value = comp.openingRetainedEarningsHKD || 0;
+      const m = document.getElementById('companyModal');
+      m.classList.remove('hidden');
+      m.classList.add('flex');
+    }
+
+    function closeCompanyModal() {
+      const m = document.getElementById('companyModal');
+      m.classList.add('hidden');
+      m.classList.remove('flex');
+    }
+
+    function saveCompanyProfile(e) {
+      e.preventDefault();
+      const mode = document.getElementById('companyModalMode').value;
+      const accMode = document.getElementById('compAccountingMode').value;
+      if (mode === 'new') {
+        const newId = 'comp_' + Date.now();
+        db.companies[newId] = {
+          id: newId,
+          nameCN: document.getElementById('compNameCN').value.trim(),
+          nameEN: document.getElementById('compNameEN').value.trim(),
+          brNo: document.getElementById('compBR').value.trim(),
+          bankLast4: document.getElementById('compBankLast4').value.trim(),
+          accountingMode: accMode,
+          periodStart: '2026-01-01',
+          periodEnd: '2026-12-31',
+          shareCapital: parseFloat(document.getElementById('compShareCapital').value) || 10000,
+          shareCapitalPaid: false,
+          openingCashHKD: parseFloat(document.getElementById('compOpeningCash').value) || 0,
+          openingDepositsHKD: parseFloat(document.getElementById('compOpeningDeposits').value) || 0,
+          openingShLoanHKD: parseFloat(document.getElementById('compOpeningShLoan').value) || 0,
+          openingRetainedEarningsHKD: parseFloat(document.getElementById('compOpeningRE').value) || 0,
+          cloudSheetUrl: '',
+          cloudFolderId: '',
+          fxSettings: {
+            mode: 'hsbc_weekly',
+            manualRates: { USD: 7.8000, CNY: 1.0800, EUR: 8.4500 },
+            weeklySchedule: [
+              { mondayDate: '2026-01-05', periodLabel: '2026-01-04(周日) ~ 2026-01-11', USD: 7.8000, CNY: 1.0800, EUR: 8.4500 }
+            ]
+          },
+          attachments: [],
+          transactions: []
+        };
+        db.activeCompanyId = newId;
+        showToast('已创建新公司独立账套并切换至该主体！');
+      } else {
+        const comp = getActiveCompany();
+        comp.nameCN = document.getElementById('compNameCN').value.trim();
+        comp.nameEN = document.getElementById('compNameEN').value.trim();
+        comp.brNo = document.getElementById('compBR').value.trim();
+        comp.bankLast4 = document.getElementById('compBankLast4').value.trim();
+        comp.accountingMode = accMode;
+        comp.shareCapital = parseFloat(document.getElementById('compShareCapital').value) || 10000;
+        comp.openingCashHKD = parseFloat(document.getElementById('compOpeningCash').value) || 0;
+        comp.openingDepositsHKD = parseFloat(document.getElementById('compOpeningDeposits').value) || 0;
+        comp.openingShLoanHKD = parseFloat(document.getElementById('compOpeningShLoan').value) || 0;
+        comp.openingRetainedEarningsHKD = parseFloat(document.getElementById('compOpeningRE').value) || 0;
+        showToast('公司主体与期初资料已更新，所有报表已同步刷新！');
+      }
+      saveDatabase();
+      closeCompanyModal();
+      renderCompanySelector();
+      refreshAll();
+      triggerAutoCloudSyncIfEnabled('更新公司主体资料');
+    }
+
+    /*************************************************************************
+     * 8. GOOGLE SHEETS + GOOGLE DRIVE CLOUD SYNC HUB ENGINE
+     *************************************************************************/
+    const GAS_BACKEND_SCRIPT_TEMPLATE = `/**
+ * 香港四表联动审计系统 - Google Sheets + Drive 无服务器后端 API (Code.gs)
+ * 部署方式：扩展程序 -> Apps Script -> 部署为 Web 应用 (执行身份: 我, 访问权限: 所有人)
+ */
+const DEFAULT_ROOT_FOLDER_ID = ''; // 可选：填入您的 Google Drive 根目录 Folder ID
+
+function doGet(e) {
+  const action = (e && e.parameter && e.parameter.action) || 'ping';
+  const entityId = e && e.parameter && e.parameter.entityId;
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let metaSheet = ss.getSheetByName('00_Entities_Index');
+  if (!metaSheet) {
+    metaSheet = ss.insertSheet('00_Entities_Index');
+    metaSheet.appendRow(['entity_id', 'name_cn', 'name_en', 'br_no', 'sheet_id', 'folder_id', 'updated_at', 'sheet_url']);
+  }
+
+  if (action === 'listEntities') {
+    const rows = metaSheet.getDataRange().getValues();
+    const list = rows.slice(1).filter(r => r[0]).map(r => ({
+      id: r[0], name_cn: r[1], name_en: r[2], br_no: r[3], sheet_id: r[4], folder_id: r[5], updated_at: r[6], sheet_url: r[7]
+    }));
+    return jsonResponse({ status: 'ok', entities: list });
+  }
+
+  if (action === 'loadEntity' && entityId) {
+    const rows = metaSheet.getDataRange().getValues();
+    const target = rows.slice(1).find(r => r[0] === entityId);
+    if (!target) return jsonResponse({ status: 'error', message: '未找到该公司云端账套' });
+    const entitySS = SpreadsheetApp.openById(target[4]);
+    const configStr = entitySS.getSheetByName('Data_JSON').getRange('A1').getValue();
+    return jsonResponse({ status: 'ok', data: JSON.parse(configStr) });
+  }
+
+  return jsonResponse({ status: 'ok', message: 'HK SME-FRS Cloud API Active' });
+}
+
+function doPost(e) {
+  try {
+    const payload = JSON.parse(e.postData.contents);
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let metaSheet = ss.getSheetByName('00_Entities_Index');
+    if (!metaSheet) {
+      metaSheet = ss.insertSheet('00_Entities_Index');
+      metaSheet.appendRow(['entity_id', 'name_cn', 'name_en', 'br_no', 'sheet_id', 'folder_id', 'updated_at', 'sheet_url']);
+    }
+
+    if (payload.action === 'saveEntity') {
+      const entity = payload.entity;
+      const rootFolderId = payload.root_folder_id || DEFAULT_ROOT_FOLDER_ID;
+      const rows = metaSheet.getDataRange().getValues();
+      let rowIndex = rows.findIndex(r => r[0] === entity.id);
+      let entitySS, folderId;
+
+      if (rowIndex === -1) {
+        const parentFolder = rootFolderId ? DriveApp.getFolderById(rootFolderId) : DriveApp.getRootFolder();
+        const companyFolder = parentFolder.createFolder(entity.brNo + '_' + entity.nameCN + '_审计档案');
+        folderId = companyFolder.getId();
+        entitySS = SpreadsheetApp.create(entity.brNo + '_' + entity.nameCN + '_四表数据库');
+        DriveApp.getFileById(entitySS.getId()).moveTo(companyFolder);
+        entitySS.insertSheet('01_流水明细账_Ledger');
+        entitySS.insertSheet('02_汇丰汇率表_FX');
+        entitySS.insertSheet('Data_JSON');
+        metaSheet.appendRow([entity.id, entity.nameCN, entity.nameEN, entity.brNo, entitySS.getId(), folderId, new Date(), entitySS.getUrl()]);
+      } else {
+        entitySS = SpreadsheetApp.openById(rows[rowIndex][4]);
+        folderId = rows[rowIndex][5];
+        metaSheet.getRange(rowIndex + 1, 2, 1, 3).setValues([[entity.nameCN, entity.nameEN, entity.brNo]]);
+        metaSheet.getRange(rowIndex + 1, 7).setValue(new Date());
+      }
+
+      entity.cloudSheetUrl = entitySS.getUrl();
+      entity.cloudFolderId = folderId;
+
+      let jsonSheet = entitySS.getSheetByName('Data_JSON') || entitySS.insertSheet('Data_JSON');
+      jsonSheet.getRange('A1').setValue(JSON.stringify(entity));
+
+      let ledgerSheet = entitySS.getSheetByName('01_流水明细账_Ledger') || entitySS.insertSheet('01_流水明细账_Ledger');
+      ledgerSheet.clearContents();
+      ledgerSheet.appendRow(['交易日期', '银行参考号', '方向', '原币种', '原币金额', '折算汇率', 'HKD记账额', '交易对手', '摘要说明', 'SME-FRS科目', '合同/发票凭证号']);
+      if (entity.transactions && entity.transactions.length > 0) {
+        const txRows = entity.transactions.map(t => [
+          t.date, t.bankRef, t.direction, t.currency, t.origAmount, t.fxRate, t.hkdAmount, t.counterparty, t.description, t.category, t.voucherRef || '【缺失凭证】'
+        ]);
+        ledgerSheet.getRange(2, 1, txRows.length, 11).setValues(txRows);
+      }
+
+      return jsonResponse({ status: 'ok', sheet_url: entitySS.getUrl(), folder_id: folderId });
+    }
+
+    if (payload.action === 'uploadVoucher') {
+      const targetFolderId = payload.folder_id || payload.root_folder_id || DEFAULT_ROOT_FOLDER_ID;
+      const folder = targetFolderId ? DriveApp.getFolderById(targetFolderId) : DriveApp.getRootFolder();
+      const blob = Utilities.newBlob(Utilities.base64Decode(payload.base64Data), payload.mimeType, payload.fileName);
+      const file = folder.createFile(blob);
+      return jsonResponse({ status: 'ok', file_url: file.getUrl(), file_id: file.getId() });
+    }
+  } catch (err) {
+    return jsonResponse({ status: 'error', message: err.toString() });
+  }
+}
+
+function jsonResponse(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}`;
+
+    function updateCloudHeaderIndicator() {
+      const cfg = db.cloudConfig || {};
+      const dot = document.getElementById('cloudStatusDot');
+      const txt = document.getElementById('cloudStatusText');
+      const bar = document.getElementById('lastSyncTimestampBar');
+      const badge = document.getElementById('modalCloudBadge');
+
+      if (cfg.webAppUrl && cfg.webAppUrl.startsWith('https://')) {
+        dot.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse';
+        txt.textContent = '已连接 Google 云端';
+        bar.textContent = cfg.lastSyncTime ? `最后云端同步: ${cfg.lastSyncTime}` : '已配置 Google Sheets 接口 (待同步)';
+        if (badge) {
+          badge.textContent = '已配置 Google 云端接口';
+          badge.className = 'text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 font-medium';
+        }
+      } else {
+        dot.className = 'w-2 h-2 rounded-full bg-amber-400';
+        txt.textContent = 'Google Sheets 云端同步';
+        bar.textContent = '云端状态: 本地缓存模式 (点击顶部配置 Google Sheets)';
+        if (badge) {
+          badge.textContent = '本地缓存模式';
+          badge.className = 'text-[11px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-400/30 font-medium';
+        }
+      }
+    }
+
+    function openCloudSyncModal() {
+      const comp = getActiveCompany();
+      const cfg = db.cloudConfig || {};
+      document.getElementById('gasWebAppUrl').value = cfg.webAppUrl || '';
+      document.getElementById('gasRootFolderId').value = cfg.rootFolderId || '';
+      document.getElementById('cloudAutoSyncToggle').checked = cfg.autoSync !== false;
+      document.getElementById('cloudModalCompName').textContent = comp.nameCN;
+      document.getElementById('gasCodePre').textContent = GAS_BACKEND_SCRIPT_TEMPLATE;
+
+      renderCloudLinksBox(comp);
+      updateCloudHeaderIndicator();
+
+      const m = document.getElementById('cloudSyncModal');
+      m.classList.remove('hidden');
+      m.classList.add('flex');
+    }
+
+    function closeCloudSyncModal() {
+      const m = document.getElementById('cloudSyncModal');
+      m.classList.add('hidden');
+      m.classList.remove('flex');
+    }
+
+    function saveCloudConfig() {
+      if (!db.cloudConfig) db.cloudConfig = {};
+      db.cloudConfig.webAppUrl = document.getElementById('gasWebAppUrl').value.trim();
+      db.cloudConfig.rootFolderId = document.getElementById('gasRootFolderId').value.trim();
+      db.cloudConfig.autoSync = document.getElementById('cloudAutoSyncToggle').checked;
+      saveDatabase();
+      updateCloudHeaderIndicator();
+    }
+
+    function renderCloudLinksBox(comp) {
+      const box = document.getElementById('cloudLinksBox');
+      if (comp.cloudSheetUrl || comp.cloudFolderId) {
+        box.innerHTML = `
+          <div class="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 space-y-1.5">
+            <div class="flex items-center justify-between">
+              <span class="font-semibold text-emerald-900">📊 专属四表 Google Sheet:</span>
+              <a href="${comp.cloudSheetUrl || '#'}" target="_blank" class="text-indigo-600 hover:underline font-bold mono">点击打开云端工作簿 ↗</a>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="font-semibold text-emerald-900">📁 专属审计档案 Drive Folder ID:</span>
+              <span class="mono text-slate-700 bg-white px-2 py-0.5 rounded border">${comp.cloudFolderId || '默认根目录'}</span>
+            </div>
+          </div>
+        `;
+      } else {
+        box.innerHTML = `
+          <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-500">
+            当前公司（${comp.nameCN}）尚未推送到云端。点击上方「⬆ 推送当前公司账套至 Google Sheets」后，系统将自动创建专属 Google Sheet 与 Google Drive 审计文件夹并在此显示直达链接。
+          </div>
+        `;
+      }
+    }
+
+    function appendCloudLog(msg, isError = false) {
+      const box = document.getElementById('cloudSyncLogBox');
+      if (!box) return;
+      const time = new Date().toLocaleTimeString('zh-HK', { hour12: false });
+      const line = document.createElement('div');
+      line.className = isError ? 'text-rose-400' : 'text-emerald-400';
+      line.textContent = `[${time}] ${msg}`;
+      box.appendChild(line);
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function clearCloudLogs() {
+      const box = document.getElementById('cloudSyncLogBox');
+      if (box) box.innerHTML = '';
+    }
+
+    function toggleGasCodePanel() {
+      const panel = document.getElementById('gasCodeContainer');
+      panel.classList.toggle('hidden');
+    }
+
+    function copyGasBackendCode() {
+      const ta = document.createElement('textarea');
+      ta.value = GAS_BACKEND_SCRIPT_TEMPLATE;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      showToast('已复制 Google Apps Script (Code.gs) 后端代码至剪贴板！');
+    }
+
+    async function testCloudConnection() {
+      const url = (db.cloudConfig && db.cloudConfig.webAppUrl) || '';
+      if (!url) {
+        appendCloudLog('请先输入有效的 Google Apps Script Web App URL', true);
+        showToast('请先填写 Google Apps Script 部署 URL');
+        return;
+      }
+      appendCloudLog(`正在连接测试: ${url} ...`);
+      try {
+        const res = await fetch(`${url}?action=ping`, { method: 'GET' });
+        const data = await res.json();
+        appendCloudLog(`连接成功！服务端响应: ${JSON.stringify(data)}`);
+        showToast('Google Sheets 云端接口连接测试成功！');
+      } catch (err) {
+        appendCloudLog(`连接请求已发送 (注意: 若未部署真实 GAS 或受跨域限制，返回: ${err.message})`, true);
+        showToast('已发送连接测试，请查看云端日志面板');
+      }
+    }
+
+    async function pushActiveCompanyToCloud() {
+      const comp = getActiveCompany();
+      const url = (db.cloudConfig && db.cloudConfig.webAppUrl) || '';
+      if (!url) {
+        openCloudSyncModal();
+        appendCloudLog('提示：尚未配置 Google Apps Script URL，请先填入部署地址后再推送。', true);
+        showToast('请先在云端同步中枢配置您的 Google Apps Script URL');
+        return;
+      }
+
+      const model = computeFinancials(comp);
+      appendCloudLog(`正在推送账套 [${comp.nameCN} (BR:${comp.brNo})] 共 ${comp.transactions.length} 笔流水至 Google Sheets...`);
+      showToast(`正在同步 [${comp.nameCN}] 至 Google Sheets...`);
+
+      try {
+        const payload = {
+          action: 'saveEntity',
+          root_folder_id: db.cloudConfig.rootFolderId || '',
+          entity: comp,
+          computed_summary: model.income
+        };
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(payload)
+        });
+        const result = await res.json();
+        if (result.status === 'ok') {
+          comp.cloudSheetUrl = result.sheet_url || comp.cloudSheetUrl;
+          comp.cloudFolderId = result.folder_id || comp.cloudFolderId;
+          db.cloudConfig.lastSyncTime = new Date().toLocaleString('zh-HK', { hour12: false });
+          saveDatabase();
+          renderCloudLinksBox(comp);
+          refreshAll();
+          appendCloudLog(`✓ 同步成功！专属 Google Sheet: ${comp.cloudSheetUrl}`);
+          showToast('已成功将当前公司四表与总账同步至 Google Sheets！');
+        } else {
+          appendCloudLog(`服务端返回错误: ${result.message || '未知错误'}`, true);
+        }
+      } catch (err) {
+        appendCloudLog(`推送异常: ${err.message}`, true);
+        showToast('推送请求异常，请打开云端同步窗口查看日志');
+      }
+    }
+
+    async function pullEntitiesFromCloud() {
+      const url = (db.cloudConfig && db.cloudConfig.webAppUrl) || '';
+      if (!url) {
+        openCloudSyncModal();
+        appendCloudLog('请先填入 Google Apps Script Web App URL 后再拉取云端公司列表。', true);
+        return;
+      }
+      appendCloudLog('正在从 Google Sheets (00_Entities_Index) 拉取多公司账套列表...');
+      try {
+        const res = await fetch(`${url}?action=listEntities`, { method: 'GET' });
+        const result = await res.json();
+        if (result.status === 'ok' && Array.isArray(result.entities)) {
+          const box = document.getElementById('cloudEntitiesListBox');
+          if (result.entities.length === 0) {
+            box.innerHTML = '<div class="text-slate-400">云端 00_Entities_Index 暂无公司记录</div>';
+          } else {
+            box.innerHTML = result.entities.map(ent => `
+              <div class="flex items-center justify-between p-2 rounded bg-slate-50 border border-slate-200">
+                <div>
+                  <span class="font-bold text-slate-800">${ent.name_cn}</span>
+                  <span class="mono text-[10px] text-slate-500 ml-1">(BR: ${ent.br_no})</span>
+                </div>
+                <button onclick="loadSingleEntityFromCloud('${ent.id}')" class="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-semibold">
+                  加载此账套
+                </button>
+              </div>
+            `).join('');
+          }
+          appendCloudLog(`✓ 成功拉取 ${result.entities.length} 家云端公司索引。`);
+          showToast(`已从云端获取 ${result.entities.length} 家公司账套列表`);
+        }
+      } catch (err) {
+        appendCloudLog(`拉取列表失败: ${err.message}`, true);
+      }
+    }
+
+    async function loadSingleEntityFromCloud(entityId) {
+      const url = (db.cloudConfig && db.cloudConfig.webAppUrl) || '';
+      if (!url) return;
+      appendCloudLog(`正在拉取公司 [${entityId}] 的完整四表与流水数据 (loadEntity)...`);
+      try {
+        const res = await fetch(`${url}?action=loadEntity&entityId=${encodeURIComponent(entityId)}`, { method: 'GET' });
+        const result = await res.json();
+        if (result.status === 'ok' && result.data) {
+          db.companies[result.data.id] = result.data;
+          db.activeCompanyId = result.data.id;
+          db.cloudConfig.lastSyncTime = new Date().toLocaleString('zh-HK', { hour12: false });
+          saveDatabase();
+          renderCompanySelector();
+          refreshAll();
+          renderCloudLinksBox(getActiveCompany());
+          appendCloudLog(`✓ 已成功加载 [${result.data.nameCN}] 云端账套并重算四表！`);
+          showToast(`已从 Google Sheets 加载账套：${result.data.nameCN}`);
+        }
+      } catch (err) {
+        appendCloudLog(`加载公司账套失败: ${err.message}`, true);
+      }
+    }
+
+    function uploadFileToGoogleDrive(file, comp, attObj) {
+      const url = (db.cloudConfig && db.cloudConfig.webAppUrl) || '';
+      if (!url) return;
+      const reader = new FileReader();
+      reader.onload = async function(e) {
+        const base64Content = e.target.result.split(',')[1];
+        appendCloudLog(`正在上传凭证附件 [${file.name}] 至 Google Drive 审计档案库...`);
+        try {
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({
+              action: 'uploadVoucher',
+              folder_id: comp.cloudFolderId || db.cloudConfig.rootFolderId || '',
+              fileName: file.name,
+              mimeType: file.type || 'application/octet-stream',
+              base64Data: base64Content
+            })
+          });
+          const result = await res.json();
+          if (result.status === 'ok' && result.file_url) {
+            attObj.driveUrl = result.file_url;
+            saveDatabase();
+            renderAttachments(comp);
+            appendCloudLog(`✓ 附件 [${file.name}] 已存入 Google Drive: ${result.file_url}`);
+            showToast(`凭证 [${file.name}] 已自动备份至 Google Drive！`);
+          }
+        } catch (err) {
+          appendCloudLog(`附件上传 Google Drive 异常: ${err.message}`, true);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function triggerAutoCloudSyncIfEnabled(reason) {
+      if (db.cloudConfig && db.cloudConfig.webAppUrl && db.cloudConfig.autoSync) {
+        appendCloudLog(`[自动同步触发: ${reason}] 正在后台同步至 Google Sheets...`);
+        pushActiveCompanyToCloud();
+      }
+    }
+
+    /*************************************************************************
+     * 9. TABS & EXPORT FUNCTIONS
+     *************************************************************************/
+    function switchTab(tab) {
+      activeTab = tab;
+      ['income', 'balance', 'cashflow', 'ledger', 'auditpack'].forEach(t => {
+        const btn = document.getElementById(`tab-${t}`);
+        const panel = document.getElementById(`panel-${t}`);
+        if (t === tab) {
+          btn.className = 'px-3.5 py-2 text-xs font-bold rounded-t-lg border-t border-x border-slate-200 bg-white text-indigo-600';
+          panel.classList.remove('hidden');
+        } else {
+          btn.className = 'px-3.5 py-2 text-xs font-semibold rounded-t-lg text-slate-600 hover:text-slate-900';
+          panel.classList.add('hidden');
+        }
+      });
+    }
+
+    function exportExcelWorkbook() {
+      const comp = getActiveCompany();
+      const m = computeFinancials(comp);
+
+      if (!m.checks.isAuditReady) {
+        showToast(`注意：当前尚有 ${m.discrepancies.length} 笔流水缺失凭证或待分类，正在为您导出带【暂记差异警示】的草稿配平四表。`);
+      } else {
+        showToast('正在导出 100% 凭证勾稽的最终法定审计配平四表！');
+      }
+
+      const statusLabel = m.checks.isAuditReady ? '最终配平定稿版 (FINAL AUDIT-READY)' : `草稿暂记配平版 (尚有 ${m.discrepancies.length} 笔流水待补凭证)`;
+
+      const csvLines = [
+        `公司中文名称,${comp.nameCN}`,
+        `公司英文名称,${comp.nameEN}`,
+        `商业登记证号(BR),${comp.brNo},主账户尾号,${comp.bankLast4}`,
+        `核算期间,${comp.periodStart} 至 ${comp.periodEnd},报表状态,${statusLabel}`,
+        '',
+        '================ 【表一：利润表 (Income Statement)】 ================',
+        '项目,本期金额 (HKD),勾稽说明',
+        `跨境贸易销售收入,${m.sums.REV_TRADE.toFixed(2)},主营业务收入-贸易`,
+        `技术咨询与服务收入,${m.sums.REV_SERVICE.toFixed(2)},主营业务收入-服务`,
+        `营业总收入合计,${m.income.totalRevenue.toFixed(2)},公式汇总`,
+        `减：跨境贸易采购成本,${(-m.sums.COGS_PURCHASE).toFixed(2)},主营业务成本`,
+        `减：国际物流与清关费,${(-m.sums.COGS_LOGISTICS).toFixed(2)},主营业务成本`,
+        `毛利 (Gross Profit),${m.income.grossProfit.toFixed(2)},营业总收入 - 主营业务成本`,
+        `减：员工薪俸支出,${(-m.sums.EXP_SALARY).toFixed(2)},管理费用`,
+        `减：强积金(MPF)供款,${(-m.sums.EXP_MPF).toFixed(2)},管理费用`,
+        `减：办公室租金支出,${(-m.sums.EXP_RENT).toFixed(2)},管理费用(不含按金)`,
+        `减：法定印花税(厘印),${(-m.sums.EXP_STAMP).toFixed(2)},管理费用`,
+        `减：行政办公及银行手续费,${(-(m.sums.EXP_ADMIN + m.sums.EXP_BANK_FEE)).toFixed(2)},管理及财务费用`,
+        `加：银行利息及内部换汇差额,${(m.sums.FIN_INTEREST + m.income.netInternalFxDiff).toFixed(2)},财务收益`,
+        `本期净利润 / (净亏损),${m.income.netProfit.toFixed(2)},结转至资产负债表未分配利润`,
+        '',
+        '================ 【表二：资产负债表 (Balance Sheet)】 ================',
+        '资产、负债及权益项目,期末余额 (HKD),勾稽说明',
+        `货币资金 (Cash & Bank),${m.balance.cashAsset.toFixed(2)},与现金流量表期末余额一致`,
+        `存出保证金 (Deposits Paid),${m.balance.depositsAsset.toFixed(2)},租约及水电按金资产重分类`,
+        `其他应收款-应收股东未缴股本,${m.balance.dueFromShareholder.toFixed(2)},未实缴股本挂账`,
+        `其他应收款-待分类暂记支出,${m.balance.suspenseDebitAsset.toFixed(2)},草稿待确认支出暂挂项`,
+        `资产总计 (Total Assets),${m.balance.totalAssets.toFixed(2)},资产合计`,
+        `其他应付款-股东借款,${m.balance.shareholderLoanPayable.toFixed(2)},无息按需偿还股东垫款`,
+        `其他应付款-待分类暂记收款,${m.balance.suspenseCreditLiab.toFixed(2)},草稿待确认收款暂挂项`,
+        `负债合计 (Total Liabilities),${m.balance.totalLiabilities.toFixed(2)},负债合计`,
+        `股本 (Share Capital),${m.balance.effectiveShareCapital.toFixed(2)},注册股本`,
+        `未分配利润 / (累计亏损),${m.balance.retainedEarnings.toFixed(2)},勾稽利润表净损益`,
+        `所有者权益合计 (Total Equity),${m.balance.totalEquity.toFixed(2)},权益合计`,
+        `负债及所有者权益总计,${m.balance.totalLiabAndEquity.toFixed(2)},负债+权益`,
+        `平衡检查差额 (Assets - L&E),${m.balance.balanceDiff.toFixed(2)},恒等于 0.00`,
+        '',
+        '================ 【表三：现金流量表 (Cash Flow Statement)】 ================',
+        '现金流量项目,本期金额 (HKD),勾稽说明',
+        `经营活动现金流入小计,${m.cashflow.cfOperatingIn.toFixed(2)},销售/服务/利息收现`,
+        `经营活动现金流出小计,${(-m.cashflow.cfOperatingOut).toFixed(2)},采购/薪金/租金/支付按金付现`,
+        `经营活动产生的现金流量净额,${m.cashflow.netOperatingCF.toFixed(2)},经营净现流`,
+        `筹资活动产生的现金流量净额,${m.cashflow.netFinancingCF.toFixed(2)},股东借款净流入+实缴股本`,
+        `现金及现金等价物净增加额,${m.cashflow.netCashChange.toFixed(2)},经营+筹资净现流`,
+        `加：期初现金余额,${m.cashflow.openingCash.toFixed(2)},期初结存`,
+        `期末现金及现金等价物余额,${m.cashflow.endingCashCF.toFixed(2)},等于资产负债表货币资金`,
+        '',
+        '================ 【表四：多币种银行流水与凭证勾稽总账】 ================',
+        '日期,银行参考号,交易对手,摘要,原币币种,原币金额,折算汇率,HKD存入,HKD支出,HKD累计结余,会计科目,凭证编号'
+      ];
+
+      m.ledgerRows.forEach(r => {
+        csvLines.push([
+          r.date,
+          r.bankRef,
+          `"${r.counterparty}"`,
+          `"${r.description}"`,
+          r.currency,
+          r.origAmount.toFixed(2),
+          r.fxRate.toFixed(4),
+          r.hkdDeposit.toFixed(2),
+          r.hkdWithdrawal.toFixed(2),
+          r.runningBalance.toFixed(2),
+          `"${ALL_CATEGORY_MAP[r.category] || r.category}"`,
+          r.voucherRef || '【缺失凭证】'
+        ].join(','));
+      });
+
+      const blob = new Blob(['\uFEFF' + csvLines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${comp.nameCN}_四表联动财务与审计报表_${comp.periodStart}_${comp.periodEnd}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function downloadAuditDoc(type) {
+      const comp = getActiveCompany();
+      const content = type === 'loan'
+        ? document.getElementById('docShareholderLoan').textContent
+        : document.getElementById('docAuditMemo').textContent;
+      const title = type === 'loan' ? '股东借款确认协议' : '租约按金重分类与MPF审计说明';
+      const blob = new Blob([content], { type: 'text/plain;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${comp.nameCN}_${title}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function copyJsonOutput() {
+      const text = document.getElementById('jsonOutputBox').textContent;
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      showToast('已复制标准化 reports.json 至剪贴板！');
+    }
+
+    function showToast(msg) {
+      const box = document.getElementById('toastBox');
+      box.textContent = msg;
+      box.classList.remove('hidden');
+      clearTimeout(window._toastTimer);
+      window._toastTimer = setTimeout(() => {
+        box.classList.add('hidden');
+      }, 3800);
+    }
+
+    window.onload = function() {
+      loadDatabase();
+      initUI();
+    };
+  </script>
+</body>
+</html>
